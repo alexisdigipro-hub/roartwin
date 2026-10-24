@@ -26,6 +26,8 @@ fs.writeFileSync(at('docs/other.txt'), 'call sheet day 2\n'.repeat(500)) // same
 fs.writeFileSync(at('docs/empty-a.txt'), '')
 fs.writeFileSync(at('docs/empty-b.txt'), '')
 fs.writeFileSync(at('.hidden/notes.txt'), 'call sheet day 1\n'.repeat(500))
+// a cloud drive's folder: left out by default, looked in when asked, or when chosen by hand
+fs.writeFileSync(at('pCloud Drive/notes.txt'), 'call sheet day 1\n'.repeat(500))
 
 ;(async () => {
   const rel = (f) => path.relative(root, f.path)
@@ -36,7 +38,7 @@ fs.writeFileSync(at('.hidden/notes.txt'), 'call sheet day 1\n'.repeat(500))
   assert.deepStrictEqual([p.dur, p.codec, p.w, p.h, p.fps], [62.5, 'h264', 1920, 1080, 25])
 
   const progress = new Set()
-  const r = await scan({ roots: [root], similar: true, skipHidden: true, minSize: 0, ffmpeg: bin }, (t) => progress.add(t.stage))
+  const r = await scan({ roots: [root], similar: true, skipHidden: true, skipCloud: true, minSize: 0, ffmpeg: bin }, (t) => progress.add(t.stage))
   console.log(r.groups.map((g) => `${g.kind}: ${names(g).join(' | ')}`).join('\n'))
 
   const video = r.groups.find((g) => g.files.some((f) => rel(f) === path.join('shoot', 'A001_C003.mp4')))
@@ -53,18 +55,25 @@ fs.writeFileSync(at('.hidden/notes.txt'), 'call sheet day 1\n'.repeat(500))
   assert.deepStrictEqual(names(docs), [path.join('docs', 'notes (1).txt'), path.join('docs', 'notes.txt')])
   assert.ok(!r.groups.some((g) => g.files.some((f) => f.name.startsWith('empty'))), 'empty files are left alone')
   assert.ok(!r.groups.some((g) => g.files.some((f) => f.path.includes('.hidden'))), 'hidden folders are skipped')
+  assert.ok(!r.groups.some((g) => g.files.some((f) => f.path.includes('pCloud Drive'))), 'cloud drives are skipped')
+  assert.deepStrictEqual(r.cloud, [path.join(root, 'pCloud Drive')], 'and named')
   assert.strictEqual(r.groups.length, 2)
   assert.ok(['list', 'compare', 'hash', 'video', 'frames', 'thumbs'].every((s) => progress.has(s)), 'every stage reports: ' + [...progress])
 
   // exact only, with the hidden folder: the copy in it joins; the re-encoded video does not
-  const r2 = await scan({ roots: [root], similar: false, skipHidden: false, ffmpeg: bin })
+  const r2 = await scan({ roots: [root], similar: false, skipHidden: false, skipCloud: true, ffmpeg: bin })
   assert.strictEqual(r2.groups.find((g) => g.files.some((f) => f.name === 'notes.txt')).files.length, 3)
+  // the cloud drive looked in: its copy joins too; chosen by hand, it is looked in whatever the switch says
+  const rc = await scan({ roots: [root], similar: false, skipHidden: true, skipCloud: false, ffmpeg: bin })
+  assert.strictEqual(rc.groups.find((g) => g.files.some((f) => f.name === 'notes.txt')).files.length, 3)
+  const rh = await scan({ roots: [path.join(root, 'pCloud Drive'), path.join(root, 'docs')], similar: false, skipHidden: true, skipCloud: true, ffmpeg: bin })
+  assert.strictEqual(rh.groups.find((g) => g.files.some((f) => f.name === 'notes.txt')).files.length, 3)
   assert.deepStrictEqual(names(r2.groups.find((g) => g.files.some((f) => f.name.endsWith('.mp4')))), [path.join('backup', 'renamed copy.mp4'), path.join('shoot', 'A001_C003.mp4')])
   // videos only
   const r3 = await scan({ roots: [root], videosOnly: true, similar: false, skipHidden: true, ffmpeg: bin })
   assert.ok(r3.groups.every((g) => g.files.every((f) => /\.(mp4|mov)$/.test(f.name))))
   // the same folder twice, and a folder inside another, count each file once
-  const r4 = await scan({ roots: [root, root, path.join(root, 'docs')], similar: false, skipHidden: true, ffmpeg: bin })
+  const r4 = await scan({ roots: [root, root, path.join(root, 'docs')], similar: false, skipHidden: true, skipCloud: true, ffmpeg: bin })
   assert.strictEqual(r4.groups.find((g) => g.files.some((f) => f.name === 'notes.txt')).files.length, 2)
   // stop
   await assert.rejects(scan({ roots: [root], similar: true, ffmpeg: bin }, () => {}, () => true), Stopped)

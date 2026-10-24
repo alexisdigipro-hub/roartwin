@@ -12,7 +12,7 @@ const fs = require('fs')
 const fsp = fs.promises
 const path = require('path')
 const crypto = require('crypto')
-const { spawn } = require('child_process')
+const { spawn, execFileSync } = require('child_process')
 
 const VIDEO = new Set(['mp4', 'mov', 'm4v', 'mkv', 'avi', 'mxf', 'mts', 'm2ts', 'ts', 'wmv', 'webm', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', 'dv', 'vob', 'ogv', 'r3d', 'braw', 'crm', 'insv', 'lrv'])
 const IMAGE = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'])
@@ -22,6 +22,25 @@ const SYSTEM = new Set(['$RECYCLE.BIN', 'System Volume Information', '.Trashes',
 const QUIET = new Set(['node_modules', 'Library', 'AppData', 'Program Files', 'Program Files (x86)', 'Windows'])
 // a Photos or Final Cut library is one thing on a Mac: its insides are not loose files to tidy
 const BUNDLE = /\.(app|photoslibrary|fcpbundle|lrdata|imovielibrary|tvlibrary|logicx)$/i
+/* cloud drives (Alex, 24 Oct: 733 GB "seen" on a 250 GB Mac): pCloud, iCloud, Dropbox, Google Drive, OneDrive and the
+   like show every file of the cloud as if it were here, and reading one downloads it. With "skip cloud drives" a folder
+   by one of these names, and a drive mounted by a cloud app (FUSE or WebDAV on a Mac), is not walked into; a folder
+   chosen by hand is looked in all the same, as it was asked for. */
+const CLOUD = /^(pcloud ?drive|icloud drive|mobile documents|cloudstorage|dropbox( \(.+\))?|google ?drive.*|my drive|onedrive.*|box drive|creative cloud files.*|megasync|nextcloud|owncloud|proton ?drive|tresorit|synologydrive|icedrive)$/i
+let mounts = null
+function cloudMounts() {
+  if (mounts) return mounts
+  mounts = new Set()
+  if (process.platform === 'win32') return mounts
+  try {
+    // "pCloud.fs on /Volumes/pCloud Drive (macfuse, nodev, nosuid)" on a Mac, "x on /p type fuse.y (...)" on Linux
+    for (const line of execFileSync('mount', { encoding: 'utf8', timeout: 4000 }).split('\n')) {
+      const m = line.match(/^.+? on (.+?) (?:\(([^,)]+)|type (\S+))/)
+      if (m && /fuse|webdav|pcloud/i.test(m[2] || m[3] || '')) mounts.add(m[1])
+    }
+  } catch { /* no mount command: the names still apply */ }
+  return mounts
+}
 const extOf = (f) => path.extname(f).slice(1).toLowerCase()
 const isVideo = (f) => VIDEO.has(extOf(f))
 const isImage = (f) => IMAGE.has(extOf(f))
@@ -36,8 +55,9 @@ async function pool(items, n, fn, stop) {
 }
 
 /* every file under the roots: path, size, mtime; one entry per real file (overlapping roots and hard links count once) */
-async function list(roots, opts, tick, stop) {
+async function list(roots, opts, tick, stop, skipped = []) {
   const out = [], seen = new Set(), dirs = [...roots]
+  const cloud = opts.skipCloud ? cloudMounts() : new Set()
   let n = 0
   while (dirs.length) {
     if (stop()) throw new Stopped()
@@ -49,6 +69,7 @@ async function list(roots, opts, tick, stop) {
       if (e.isSymbolicLink()) continue
       if (e.isDirectory()) {
         if (SYSTEM.has(e.name)) continue
+        if (opts.skipCloud && (CLOUD.test(e.name) || cloud.has(p))) { skipped.push(p); continue }
         if (opts.skipHidden && (e.name.startsWith('.') || QUIET.has(e.name) || BUNDLE.test(e.name))) continue
         dirs.push(p)
         continue
@@ -220,14 +241,15 @@ async function thumb(bin, f, stop) {
 }
 
 /*
- * scan({ roots, videosOnly, similar, minSize, skipHidden, ffmpeg }, tick, stop) ->
+ * scan({ roots, videosOnly, similar, minSize, skipHidden, skipCloud, ffmpeg }, tick, stop) ->
  *   { groups: [{ id, kind: 'exact' | 'similar', size, free, files: [{ path, name, dir, size, mtime, video, thumb, keep }] }], files, took }
  * tick(progress) is called often; stop() returning true ends the scan with a Stopped error.
  */
 async function scan(opts, tick = () => {}, stop = () => false) {
   const t0 = Date.now()
   const roots = [...new Set((opts.roots || []).map((r) => path.resolve(r)))]
-  const files = await list(roots, opts, tick, stop)
+  const cloud = []
+  const files = await list(roots, opts, tick, stop, cloud)
   const exactGroups = await exact(files, tick, stop)
   const out = exactGroups.map((g) => ({ kind: 'exact', files: g }))
   if (opts.similar !== false && opts.ffmpeg) {
@@ -266,7 +288,7 @@ async function scan(opts, tick = () => {}, stop = () => false) {
       files: g.files.map((f) => ({ path: f.path, name: f.name, dir: f.dir, size: f.size, mtime: f.mtime, video: f.video || null, thumb: f.thumb || '', keep: f === keep })),
     }
   }).sort((a, b) => b.free - a.free)
-  return { groups, files: files.length, took: Date.now() - t0 }
+  return { groups, files: files.length, took: Date.now() - t0, cloud }
 }
 
 module.exports = { scan, Stopped, parseProbe, dhash, hamming, samePictures, isVideo }

@@ -71,7 +71,7 @@ const switchEl = (on, onFlip, label) => h('button', { type: 'button', class: 'sw
 const S = {
   view: 'home',
   roots: store.get('roots', []),
-  opts: { videosOnly: false, similar: true, minSize: 0, skipHidden: true, ...store.get('opts', {}) },
+  opts: { videosOnly: false, similar: true, minSize: 0, skipHidden: true, skipCloud: true, ...store.get('opts', {}) },
   progress: null, stages: new Set(),
   result: null, filter: 'all', shown: 40, sel: new Set(), gone: new Set(),
   version: '', update: null,
@@ -146,7 +146,10 @@ function viewHome() {
       opt('Smallest file', 'Smaller files are left out.',
         seg([[0, 'Any'], [1e6, '1 MB'], [1e8, '100 MB'], [1e9, '1 GB']], o.minSize, (v) => set('minSize', v))),
       opt('Skip hidden and system folders', 'The system, the apps, the Trash, and libraries like Photos or Final Cut.',
-        switchEl(o.skipHidden, (v) => set('skipHidden', v), 'Skip hidden and system folders'))),
+        switchEl(o.skipHidden, (v) => set('skipHidden', v), 'Skip hidden and system folders')),
+      // Alex, 24 Oct: a cloud drive shows the whole cloud as if it were here, and reading it downloads it
+      opt('Skip cloud drives', 'pCloud, iCloud, Dropbox, Google Drive, OneDrive: their files live online, and reading them downloads them. A cloud folder you choose yourself is still looked in.',
+        switchEl(o.skipCloud, (v) => set('skipCloud', v), 'Skip cloud drives'))),
     h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !S.roots.length, onclick: start }, ico('search'), 'Find twins')),
     h('p', { class: 'note' }, 'Found files go to the Trash only when you say so, and one of each always stays.'))))
 }
@@ -201,6 +204,9 @@ function drawProgress() {
 }
 
 /* ---------- the twins ---------- */
+// which cloud drives were left out, named, so a missing folder is never a mystery
+const cloudChip = (r) => (r.cloud?.length ? h('span', { class: 'chip', title: r.cloud.join('\n') },
+  `Cloud left out: ${[...new Set(r.cloud.map((p) => p.split(/[\\/]/).pop()))].slice(0, 3).join(', ')}${r.cloud.length > 3 ? '…' : ''}`) : null)
 const live = (g) => g.files.filter((f) => !S.gone.has(f.path))
 function viewResults() {
   const r = S.result
@@ -211,13 +217,15 @@ function viewResults() {
       h('div', { class: 'big-i', html: I.done }),
       h('h2', { html: S.gone.size ? 'All <b>tidy</b>.' : 'No <b>twins</b> here.' }),
       h('p', {}, `${plural(r.files, 'file')} looked at${S.gone.size ? `, ${plural(S.gone.size, 'file')} in the Trash` : ''}.`),
+      cloudChip(r),
       h('button', { class: 'btn', onclick: () => { S.view = 'home'; draw() } }, ico('back'), 'Back'))))
   }
   const free = groups.reduce((a, g) => a + g.files.filter((f) => !f.keep).reduce((b, f) => b + f.size, 0), 0)
   const sum = h('div', { class: 'sum' },
     h('span', { class: 'chip tint' }, h('i'), `${plural(groups.length, 'group')} of twins`),
     h('span', { class: 'chip' }, `up to ${bytes(free)} to free`),
-    h('span', { class: 'chip' }, `${plural(r.files, 'file')} looked at in ${dur(r.took / 1000)}`))
+    h('span', { class: 'chip' }, `${plural(r.files, 'file')} looked at in ${dur(r.took / 1000)}`),
+    cloudChip(r))
   const shown = list.slice(0, S.shown)
   return h('main', {}, h('div', { class: 'res' }, sum, ...shown.map(groupEl),
     list.length > shown.length ? h('button', { class: 'btn more', onclick: () => { S.shown += 60; draw() } }, `Show ${Math.min(60, list.length - shown.length)} more`) : null))
