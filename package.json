@@ -1,0 +1,73 @@
+{
+  "name": "roartwin",
+  "productName": "RoarTwin",
+  "version": "0.1.0",
+  "description": "RoarTwin: finds duplicate files, and the same video in another file. The Mad Lions Lab.",
+  "author": "THEMADLIONS",
+  "private": true,
+  "main": "electron/main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node test/engine.test.js",
+    "dist:mac": "npm run ffmpeg:arm64 && electron-builder --mac dmg --arm64 --publish never && npm run ffmpeg:x64 && electron-builder --mac dmg --x64 --publish never",
+    "dist:win": "electron-builder --win --publish never",
+    "ffmpeg:arm64": "node -e \"require('fs').rmSync('node_modules/ffmpeg-static/ffmpeg',{force:true})\" && npm_config_arch=arm64 npm rebuild ffmpeg-static && file node_modules/ffmpeg-static/ffmpeg",
+    "ffmpeg:x64": "node -e \"require('fs').rmSync('node_modules/ffmpeg-static/ffmpeg',{force:true})\" && npm_config_arch=x64 npm rebuild ffmpeg-static && file node_modules/ffmpeg-static/ffmpeg"
+  },
+  "dependencies": {
+    "ffmpeg-static": "5.2.0"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "com.themadlions.roartwin",
+    "productName": "RoarTwin",
+    "directories": {
+      "output": "out",
+      "buildResources": "electron/build"
+    },
+    "files": [
+      "electron/main.js",
+      "electron/preload.js",
+      "electron/updater.js",
+      "electron/engine.js",
+      "app/**/*",
+      "package.json"
+    ],
+    "asarUnpack": [
+      "node_modules/ffmpeg-static/**"
+    ],
+    "afterPack": "./electron/adhoc-sign.js",
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.utilities",
+      "identity": null,
+      "artifactName": "RoarTwin-${version}-beta-Mac-${arch}.${ext}"
+    },
+    "dmg": {
+      "artifactName": "RoarTwin-${version}-beta-Mac-${arch}.${ext}",
+      "title": "RoarTwin"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "RoarTwin-${version}-beta-Windows-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "runAfterFinish": true,
+      "artifactName": "RoarTwin-${version}-beta-Windows-Setup.${ext}"
+    }
+  }
+}
