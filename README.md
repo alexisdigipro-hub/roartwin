@@ -11,6 +11,10 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   frame rate. Videos of about the same length (within 1% or a second) are compared by their pictures: nine frames
   from 10% to 90% through, each a 64-bit difference hash. Most frames nearly alike = the same video. Flat frames
   (black, one colour) are left out, so different black clips are not twins.
+- **Cloud drives left out (a setting, on by default):** pCloud, iCloud, Dropbox, Google Drive, OneDrive and the like
+  show the whole cloud as if it were on the computer, and reading a file downloads it. Folders by those names, and
+  drives a cloud app mounts (FUSE or WebDAV on a Mac), are not walked into; the results name what was left out. A
+  cloud folder chosen by hand is still looked in.
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
 ## Safe by design
