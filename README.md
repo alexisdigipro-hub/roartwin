@@ -15,6 +15,8 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   show the whole cloud as if it were on the computer, and reading a file downloads it. Folders by those names, and
   drives a cloud app mounts (FUSE or WebDAV on a Mac), are not walked into; the results name what was left out. A
   cloud folder chosen by hand is still looked in.
+- **Look for:** Every file, Videos, Images (photos, HEIC, PSD and camera RAW: CR3, NEF, ARW, DNG…) or Audio (WAV,
+  AIFF, MP3, M4A, FLAC…).
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
 ## Safe by design
