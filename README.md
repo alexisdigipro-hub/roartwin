@@ -32,3 +32,5 @@ to choose. The list can be saved as CSV.
 ## Releases
 Bump `version` in package.json, tag `vX.Y.Z`, push the tag: `.github/workflows/desktop.yml` builds the Mac (Apple
 Silicon and Intel) and Windows installers onto a GitHub release; the app updates itself from there.
+On a Mac it can replace itself only from Applications: started from the .dmg or Downloads, it offers to move itself
+there first (Move to Applications), and from then on every update comes by itself (Restart to update, or on quit).
