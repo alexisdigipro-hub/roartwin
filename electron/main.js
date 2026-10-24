@@ -144,7 +144,29 @@ ipcMain.handle('twin:has-ffmpeg', () => { const p = ffmpegPath(); return !!p && 
 
 if (!app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
+/* RoarTwin can update itself only where it may replace itself: in Applications, not opened straight from the .dmg
+   or from Downloads (macOS runs those from a hidden read-only copy). There the update used to open the new .dmg
+   instead, so it had to be installed by hand every time (Alex, 24 Oct: "make it update by itself"). Started from
+   anywhere else, it offers to move itself to Applications once per start; Electron moves it and opens it again. */
+function offerApplications() {
+  if (process.platform !== 'darwin' || !app.isPackaged || app.isInApplicationsFolder()) return false
+  const r = dialog.showMessageBoxSync({
+    type: 'question', buttons: ['Move to Applications', 'Not now'], defaultId: 0, cancelId: 1,
+    message: 'Move RoarTwin to Applications?',
+    detail: 'From there RoarTwin updates itself, with nothing to download or install by hand. It opens again by itself.',
+  })
+  if (r !== 0) return false
+  try {
+    // an older RoarTwin already in Applications is replaced by this one
+    return app.moveToApplicationsFolder({ conflictHandler: () => true })
+  } catch (e) {
+    dialog.showErrorBox('RoarTwin could not move itself', `${e?.message || e}\n\nDrag RoarTwin into the Applications folder yourself and open it from there.`)
+    return false
+  }
+}
+
 app.whenReady().then(() => {
+  if (offerApplications()) return
   serveApp()
   menu()
   open()
