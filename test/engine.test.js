@@ -23,6 +23,11 @@ make(['-f', 'lavfi', '-i', 'color=black:size=320x180:rate=25:duration=6', '-c:v'
 fs.writeFileSync(at('docs/notes.txt'), 'call sheet day 1\n'.repeat(500))
 fs.writeFileSync(at('docs/notes (1).txt'), 'call sheet day 1\n'.repeat(500))
 fs.writeFileSync(at('docs/other.txt'), 'call sheet day 2\n'.repeat(500)) // same size, other bytes
+// a photo and a sound, each twice
+fs.writeFileSync(at('stills/IMG_0001.CR3'), 'raw picture\n'.repeat(400))
+fs.writeFileSync(at('stills/copy/IMG_0001.CR3'), 'raw picture\n'.repeat(400))
+fs.writeFileSync(at('sound/take1.wav'), 'boom mic\n'.repeat(600))
+fs.writeFileSync(at('sound/take1 copy.wav'), 'boom mic\n'.repeat(600))
 fs.writeFileSync(at('docs/empty-a.txt'), '')
 fs.writeFileSync(at('docs/empty-b.txt'), '')
 fs.writeFileSync(at('.hidden/notes.txt'), 'call sheet day 1\n'.repeat(500))
@@ -57,7 +62,7 @@ fs.writeFileSync(at('pCloud Drive/notes.txt'), 'call sheet day 1\n'.repeat(500))
   assert.ok(!r.groups.some((g) => g.files.some((f) => f.path.includes('.hidden'))), 'hidden folders are skipped')
   assert.ok(!r.groups.some((g) => g.files.some((f) => f.path.includes('pCloud Drive'))), 'cloud drives are skipped')
   assert.deepStrictEqual(r.cloud, [path.join(root, 'pCloud Drive')], 'and named')
-  assert.strictEqual(r.groups.length, 2)
+  assert.strictEqual(r.groups.length, 4) // the video, the notes, the photo, the sound
   assert.ok(['list', 'compare', 'hash', 'video', 'frames', 'thumbs'].every((s) => progress.has(s)), 'every stage reports: ' + [...progress])
 
   // exact only, with the hidden folder: the copy in it joins; the re-encoded video does not
@@ -71,7 +76,12 @@ fs.writeFileSync(at('pCloud Drive/notes.txt'), 'call sheet day 1\n'.repeat(500))
   assert.deepStrictEqual(names(r2.groups.find((g) => g.files.some((f) => f.name.endsWith('.mp4')))), [path.join('backup', 'renamed copy.mp4'), path.join('shoot', 'A001_C003.mp4')])
   // videos only
   const r3 = await scan({ roots: [root], videosOnly: true, similar: false, skipHidden: true, ffmpeg: bin })
-  assert.ok(r3.groups.every((g) => g.files.every((f) => /\.(mp4|mov)$/.test(f.name))))
+  assert.ok(r3.groups.length && r3.groups.every((g) => g.files.every((f) => /\.(mp4|mov)$/.test(f.name))))
+  // images only, audio only
+  const ri = await scan({ roots: [root], kind: 'image', similar: false, skipHidden: true, skipCloud: true, ffmpeg: bin })
+  assert.deepStrictEqual(ri.groups.map((g) => g.files.length), [2]); assert.ok(ri.groups[0].files.every((f) => f.name === 'IMG_0001.CR3'))
+  const ra = await scan({ roots: [root], kind: 'audio', similar: false, skipHidden: true, skipCloud: true, ffmpeg: bin })
+  assert.deepStrictEqual(ra.groups.map((g) => g.files.map((f) => f.name).sort()), [['take1 copy.wav', 'take1.wav']])
   // the same folder twice, and a folder inside another, count each file once
   const r4 = await scan({ roots: [root, root, path.join(root, 'docs')], similar: false, skipHidden: true, skipCloud: true, ffmpeg: bin })
   assert.strictEqual(r4.groups.find((g) => g.files.some((f) => f.name === 'notes.txt')).files.length, 2)

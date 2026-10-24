@@ -16,6 +16,10 @@ const { spawn, execFileSync } = require('child_process')
 
 const VIDEO = new Set(['mp4', 'mov', 'm4v', 'mkv', 'avi', 'mxf', 'mts', 'm2ts', 'ts', 'wmv', 'webm', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', 'dv', 'vob', 'ogv', 'r3d', 'braw', 'crm', 'insv', 'lrv'])
 const IMAGE = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'])
+// Look for: Images also takes the camera RAWs, HEIC and Photoshop files (no preview made for those); Audio the sound
+// of a shoot and of a mix (Alex, 24 Oct)
+const PHOTO = new Set([...IMAGE, 'heic', 'heif', 'avif', 'psd', 'psb', 'dng', 'cr2', 'cr3', 'crw', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'raf', 'orf', 'rw2', 'pef', 'srw', 'x3f', '3fr', 'iiq', 'erf', 'kdc', 'mos', 'mrw', 'raw'])
+const AUDIO = new Set(['wav', 'bwf', 'aif', 'aiff', 'aifc', 'mp3', 'm4a', 'aac', 'flac', 'alac', 'ogg', 'oga', 'opus', 'wma', 'caf', 'ac3', 'eac3', 'dts', 'mka', 'amr', 'm4b', 'ape', 'wv', 'sd2', 'rf64', 'w64'])
 // never worth walking into: the system's own folders and the trash
 const SYSTEM = new Set(['$RECYCLE.BIN', 'System Volume Information', '.Trashes', '.Trash', '.Spotlight-V100', '.fseventsd', '.DocumentRevisions-V100', '.TemporaryItems'])
 // with "skip hidden and system folders": also the app's own data and a Mac's Library (caches, mail, settings)
@@ -44,6 +48,8 @@ function cloudMounts() {
 const extOf = (f) => path.extname(f).slice(1).toLowerCase()
 const isVideo = (f) => VIDEO.has(extOf(f))
 const isImage = (f) => IMAGE.has(extOf(f))
+// which files a scan takes: 'all', 'video', 'image' or 'audio' (videosOnly from before means 'video')
+const KIND = { video: (f) => isVideo(f), image: (f) => PHOTO.has(extOf(f)), audio: (f) => AUDIO.has(extOf(f)) }
 
 class Stopped extends Error { constructor() { super('Stopped') } }
 
@@ -76,7 +82,8 @@ async function list(roots, opts, tick, stop, skipped = []) {
       }
       if (!e.isFile()) continue
       if (opts.skipHidden && e.name.startsWith('.')) continue
-      if (opts.videosOnly && !isVideo(e.name)) continue
+      const only = KIND[opts.kind || (opts.videosOnly ? 'video' : 'all')]
+      if (only && !only(e.name)) continue
       let st
       try { st = await fsp.stat(p) } catch { continue }
       if (st.size < Math.max(1, opts.minSize || 0)) continue
@@ -241,7 +248,7 @@ async function thumb(bin, f, stop) {
 }
 
 /*
- * scan({ roots, videosOnly, similar, minSize, skipHidden, skipCloud, ffmpeg }, tick, stop) ->
+ * scan({ roots, kind: 'all' | 'video' | 'image' | 'audio', similar, minSize, skipHidden, skipCloud, ffmpeg }, tick, stop) ->
  *   { groups: [{ id, kind: 'exact' | 'similar', size, free, files: [{ path, name, dir, size, mtime, video, thumb, keep }] }], files, took }
  * tick(progress) is called often; stop() returning true ends the scan with a Stopped error.
  */

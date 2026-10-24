@@ -114,6 +114,14 @@ function draw() {
 }
 
 /* ---------- home: where to look ---------- */
+const LOOK_FOR = {
+  all: 'Every kind of file: videos, photos, sound, projects.',
+  video: 'Videos only: MOV, MP4, MXF, MKV, AVI and more.',
+  image: 'Images only: JPG, PNG, HEIC, TIFF, PSD and camera RAW (CR3, NEF, ARW, DNG…).',
+  audio: 'Audio only: WAV, AIFF, MP3, M4A, FLAC and more.',
+}
+// the choice as it is kept; "Videos only" from before reads as Videos
+const lookFor = (o) => (LOOK_FOR[o.kind] ? o.kind : o.videosOnly ? 'video' : 'all')
 async function addRoots(paths) {
   const add = []
   for (const p of paths) if (p && !S.roots.includes(p) && (await T.isFolder(p))) add.push(p)
@@ -139,8 +147,9 @@ function viewHome() {
       h('p', {}, 'RoarTwin finds the same file twice, whatever its name, and the same video in another size or format, so you keep one and free the space.')),
     drop,
     h('div', { class: 'opts' },
-      opt('Look for', o.videosOnly ? 'Videos only: MOV, MP4, MXF, MKV, AVI and more.' : 'Every kind of file: videos, photos, sound, projects.',
-        seg([[false, 'Every file'], [true, 'Videos only']], o.videosOnly, (v) => set('videosOnly', v))),
+      // Images and Audio too (Alex, 24 Oct)
+      opt('Look for', LOOK_FOR[lookFor(o)],
+        seg([['all', 'Every file'], ['video', 'Videos'], ['image', 'Images'], ['audio', 'Audio']], lookFor(o), (v) => { o.videosOnly = false; set('kind', v) })),
       opt('The same video in another file', 'Also when it was exported again, in another size, codec or format. RoarTwin compares the pictures.',
         switchEl(o.similar, (v) => set('similar', v), 'The same video in another file')),
       opt('Smallest file', 'Smaller files are left out.',

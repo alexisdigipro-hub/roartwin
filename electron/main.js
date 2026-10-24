@@ -97,7 +97,7 @@ ipcMain.handle('twin:scan', async (e, opts) => {
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
     const r = await engine.scan({
-      roots, videosOnly: !!opts.videosOnly, similar: opts.similar !== false, skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false,
+      roots, kind: ['video', 'image', 'audio'].includes(opts.kind) ? opts.kind : opts.videosOnly ? 'video' : 'all', similar: opts.similar !== false, skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false,
       minSize: Math.max(0, Number(opts.minSize) || 0), ffmpeg: ffmpegPath(),
     }, tick, () => stopNow)
     last = r
