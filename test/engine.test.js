@@ -5,7 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { scan, parseProbe, Stopped } = require('../electron/engine')
+const { scan, backupCheck, parseProbe, parseAudio, Stopped } = require('../electron/engine')
 
 const bin = process.env.FFMPEG || require('ffmpeg-static')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin-'))
@@ -88,6 +88,74 @@ fs.writeFileSync(at('pCloud Drive/notes.txt'), 'call sheet day 1\n'.repeat(500))
   // stop
   await assert.rejects(scan({ roots: [root], similar: true, ffmpeg: bin }, () => {}, () => true), Stopped)
 
+  await more()
   fs.rmSync(root, { recursive: true, force: true })
   console.log('engine: all good')
 })().catch((e) => { console.error(e); fs.rmSync(root, { recursive: true, force: true }); process.exit(1) })
+
+/* Alex, 25 Oct: folders twice, Masters, a part of a longer video, similar photos, the same sound, proxies, the backup check */
+async function more() {
+  const r2 = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin2-'))
+  const at2 = (...p) => { const f = path.join(r2, ...p); fs.mkdirSync(path.dirname(f), { recursive: true }); return f }
+  const make2 = (args, out) => execFileSync(bin, ['-hide_banner', '-loglevel', 'error', '-y', ...args, at2(out)])
+  const rel2 = (f) => path.relative(r2, f.path)
+  try {
+    // a card copied whole, twice; a third folder with one file changed is no twin
+    for (const d of ['CARD_A', 'old/CARD_A copy']) { fs.writeFileSync(at2(d, 'C001.mov'), 'clip one\n'.repeat(3000)); fs.writeFileSync(at2(d, 'sub', 'C002.mov'), 'clip two\n'.repeat(2000)) }
+    fs.writeFileSync(at2('CARD_B', 'C001.mov'), 'clip one\n'.repeat(3000)); fs.writeFileSync(at2('CARD_B', 'sub', 'C002.mov'), 'clip 2!!\n'.repeat(2000))
+    // a long video and a part cut out of it, re-encoded smaller
+    make(['-f', 'lavfi', '-i', 'testsrc=size=640x360:rate=25:duration=40', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'ultrafast'], '../' + path.basename(r2) + '/edit/full.mp4')
+    make2(['-ss', '12', '-i', at2('edit/full.mp4'), '-t', '8', '-vf', 'scale=320:180', '-c:v', 'mpeg4', '-q:v', '4'], 'edit/teaser.mov')
+    // photos: one saved again smaller, one of something else
+    make2(['-f', 'lavfi', '-i', 'testsrc2=size=1600x900', '-frames:v', '1'], 'stills/still.png')
+    make2(['-i', at2('stills/still.png'), '-vf', 'scale=800:450', '-q:v', '3'], 'stills/still small.jpg')
+    make2(['-f', 'lavfi', '-i', 'mandelbrot=size=1600x900', '-frames:v', '1'], 'stills/other.png')
+    // a sound as WAV and as AAC, and another sound as long
+    const tone = (f1, f2) => `aevalsrc='0.4*sin(2*PI*(${f1}+200*sin(2*PI*0.3*t))*t)+0.3*sin(2*PI*(${f2}+300*sin(2*PI*0.7*t))*t)':s=44100:d=30`
+    make2(['-f', 'lavfi', '-i', tone(300, 800)], 'mix/song.wav')
+    make2(['-i', at2('mix/song.wav'), '-c:a', 'aac', '-b:a', '128k'], 'mix/song web.m4a')
+    make2(['-f', 'lavfi', '-i', tone(520, 1400)], 'mix/other song.wav')
+    // a proxy of the full video (never a twin of it) and a proxy whose original is not here
+    make2(['-i', at2('edit/full.mp4'), '-vf', 'scale=320:180', '-c:v', 'mpeg4', '-q:v', '6'], 'edit/Proxy/full.mov')
+    make2(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25:duration=4', '-c:v', 'mpeg4'], 'edit/Proxy/B002_C001_Proxy.mov')
+
+    const r = await scan({ roots: [r2], protect: [at2('old')], similar: true, parts: true, photos: true, sounds: true, proxies: true, skipHidden: true, skipCloud: true, minSize: 0, ffmpeg: bin })
+    const of = (k) => r.groups.filter((g) => g.kind === k)
+    const names = (g) => g.files.map(rel2).sort()
+    console.log(r.groups.map((g) => `${g.kind}: ${names(g).join(' | ')}`).join('\n'))
+    // folders
+    assert.deepStrictEqual(of('folder').map(names), [['CARD_A', path.join('old', 'CARD_A copy')]])
+    assert.ok(!of('exact').some((g) => g.files.every((f) => /CARD_A/.test(f.path))), 'the files of twin folders are shown with the folders')
+    // Masters: the copy under old/ is kept and protected
+    const fold = of('folder')[0].files
+    assert.ok(fold.find((f) => f.keep).protected && fold.find((f) => f.keep).path.includes('old'), 'the Masters copy is the one kept')
+    // the part
+    assert.deepStrictEqual(of('part').map(names), [[path.join('edit', 'full.mp4'), path.join('edit', 'teaser.mov')]])
+    const teaser = of('part')[0].files.find((f) => f.name === 'teaser.mov')
+    assert.ok(Math.abs(teaser.partAt - 12) <= 1, 'starts about 12 s in: ' + teaser.partAt)
+    // photos
+    assert.deepStrictEqual(of('photo').map(names), [[path.join('stills', 'still small.jpg'), path.join('stills', 'still.png')]])
+    assert.strictEqual(of('photo')[0].files.find((f) => f.keep).name, 'still.png', 'keeps the most pixels')
+    // sound
+    assert.deepStrictEqual(of('sound').map(names), [[path.join('mix', 'song web.m4a'), path.join('mix', 'song.wav')]])
+    assert.strictEqual(of('sound')[0].files.find((f) => f.keep).name, 'song.wav')
+    // proxies: the proxy of the full video is no twin of it; the one without an original is listed apart
+    assert.ok(!r.groups.some((g) => g.kind !== 'orphan' && g.files.some((f) => f.path.includes('Proxy'))), 'proxies are left alone')
+    assert.deepStrictEqual(of('orphan').map(names), [[path.join('edit', 'Proxy', 'B002_C001_Proxy.mov')]])
+    // proxies off: the proxy is the same video again
+    const r3 = await scan({ roots: [path.join(r2, 'edit')], similar: true, proxies: false, photos: false, sounds: false, ffmpeg: bin })
+    assert.ok(r3.groups.some((g) => g.kind === 'similar' && g.files.some((f) => f.path.includes('Proxy'))))
+    // audio probe
+    assert.deepStrictEqual(parseAudio('  Duration: 00:03:05.20, start: 0.0, bitrate: 1411 kb/s\n  Stream #0:0: Audio: pcm_s16le ([1][0][0][0] / 0x0001), 44100 Hz, stereo, s16, 1411 kb/s'), { dur: 185.2, codec: 'pcm_s16le', rate: 44100, kbps: 1411 })
+
+    // the backup check: one file missing, one different, the rest there (wherever and whatever they are called)
+    fs.writeFileSync(at2('card/A.mov'), 'take a\n'.repeat(4000)); fs.writeFileSync(at2('card/B.mov'), 'take b\n'.repeat(4000))
+    fs.writeFileSync(at2('card/sub/C.wav'), 'take c\n'.repeat(4000)); fs.writeFileSync(at2('card/D.mov'), 'take d\n'.repeat(4000))
+    fs.writeFileSync(at2('bak/day1/A renamed.mov'), 'take a\n'.repeat(4000)); fs.writeFileSync(at2('bak/day1/x/C.wav'), 'take c\n'.repeat(4000))
+    fs.writeFileSync(at2('bak/B.mov'), 'take B\n'.repeat(4000))
+    const b = await backupCheck({ source: at2('card'), backup: at2('bak') })
+    assert.strictEqual(b.total, 4); assert.strictEqual(b.safe, 2)
+    assert.deepStrictEqual(b.missing.map((m) => [m.name, m.why]).sort(), [['B.mov', 'differs'], ['D.mov', 'missing']])
+    await assert.rejects(backupCheck({ source: at2('card'), backup: at2('card/sub') }), /inside/)
+  } finally { fs.rmSync(r2, { recursive: true, force: true }) }
+}

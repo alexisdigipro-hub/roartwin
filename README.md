@@ -17,6 +17,21 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   cloud folder chosen by hand is still looked in.
 - **Look for:** Every file, Videos, Images (photos, HEIC, PSD and camera RAW: CR3, NEF, ARW, DNG…) or Audio (WAV,
   AIFF, MP3, M4A, FLAC…).
+- **Whole folders twice:** a folder whose every file has an exact twin in another folder, file for file, is shown as
+  one folder twice (a card copied whole), and its files are not listed one by one again.
+- **A part of a longer video** (a choice, slower): every video one frame a second; a shorter one whose frames match a
+  stretch of a longer one is a part of it, and where it starts is shown (a teaser cut out of the full clip).
+- **Similar photos:** each picture as a 9x8 fingerprint; the same photo saved again or resized, and burst shots that
+  are nearly alike, of the same shape.
+- **The same sound in another file:** a WAV and its MP3/M4A, compared by the sound itself (an audio fingerprint in the
+  Haitsma-Kalker way: rising or falling energy across 33 bands, 40 seconds of it).
+- **Editing proxies** (Proxy, Proxies, Proxy Media, CacheClip folders, or …_Proxy names) are never a twin of their
+  original; a proxy whose original is not in the folders looked at is listed apart, nothing chosen.
+- **Masters:** the lock on a folder marks it Masters: nothing in it is ever chosen or moved to the Trash (the app checks
+  too), and its copy is always the one kept.
+- **Check a backup:** the originals on one side, the backup on the other; every file is looked for on the backup by its
+  bytes (size, samples, SHA-256), wherever it sits and whatever it is called. What is missing, or different at the same
+  place, is listed and can be saved as CSV. Nothing is changed.
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
 ## Safe by design

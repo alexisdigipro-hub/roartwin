@@ -99,6 +99,9 @@ ipcMain.handle('twin:scan', async (e, opts) => {
     const r = await engine.scan({
       roots, kind: ['video', 'image', 'audio'].includes(opts.kind) ? opts.kind : opts.videosOnly ? 'video' : 'all', similar: opts.similar !== false, skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false,
       minSize: Math.max(0, Number(opts.minSize) || 0), ffmpeg: ffmpegPath(),
+      // Alex, 25 Oct: Masters folders, a part of a longer video, similar photos, the same sound, proxies
+      protect: (Array.isArray(opts.protect) ? opts.protect : []).map(String).filter((p) => roots.some((r) => engine.inside(p, r) || engine.inside(r, p))),
+      folders: opts.folders !== false, parts: !!opts.parts, photos: opts.photos !== false, sounds: opts.sounds !== false, proxies: opts.proxies !== false,
     }, tick, () => stopNow)
     last = r
     return r
@@ -108,6 +111,24 @@ ipcMain.handle('twin:scan', async (e, opts) => {
   } finally { scanning = false; powerSaveBlocker.stop(awake) }
 })
 ipcMain.handle('twin:stop', () => { stopNow = true; return true })
+// is every file of the originals on the backup? (Alex, 25 Oct) Reads only; changes nothing.
+let lastBackup = null
+ipcMain.handle('twin:backup', async (e, opts) => {
+  if (scanning) throw new Error('A scan is already running.')
+  const dirOk = (p) => { try { return fs.statSync(String(p)).isDirectory() } catch { return false } }
+  if (!dirOk(opts?.source) || !dirOk(opts?.backup)) throw new Error('Choose the originals and the backup first.')
+  scanning = true; stopNow = false
+  const awake = powerSaveBlocker.start('prevent-app-suspension')
+  let lastTick = 0
+  const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
+  try {
+    lastBackup = await engine.backupCheck({ source: String(opts.source), backup: String(opts.backup), skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false }, tick, () => stopNow)
+    return lastBackup
+  } catch (err) {
+    if (err instanceof engine.Stopped) return { stopped: true }
+    throw err
+  } finally { scanning = false; powerSaveBlocker.stop(awake) }
+})
 
 // to the Trash: only files of the last scan, and never every file of a group
 ipcMain.handle('twin:trash', async (_e, paths) => {
@@ -115,20 +136,26 @@ ipcMain.handle('twin:trash', async (_e, paths) => {
   const ok = [], failed = []
   for (const g of last?.groups || []) {
     const left = g.files.filter((f) => !want.has(f.path))
-    const go = g.files.filter((f) => want.has(f.path))
+    let go = g.files.filter((f) => want.has(f.path))
     if (!go.length) continue
-    if (!left.length) { go.forEach((f) => failed.push({ path: f.path, error: 'At least one file of each group stays.' })); continue }
+    // a proxy with no original is a group of one: it may go; every other group keeps one
+    if (!left.length && g.kind !== 'orphan') { go.forEach((f) => failed.push({ path: f.path, error: 'At least one file of each group stays.' })); continue }
+    // nothing in a Masters folder ever goes
+    const masters = go.filter((f) => f.protected || (last.protect || []).some((p) => engine.inside(f.path, p)))
+    masters.forEach((f) => failed.push({ path: f.path, error: 'It is in a Masters folder.' }))
+    go = go.filter((f) => !masters.includes(f))
     for (const f of go) {
       try { await shell.trashItem(f.path); ok.push(f.path) } catch (err) { failed.push({ path: f.path, error: String(err?.message || err) }) }
     }
   }
   if (last) {
     const gone = new Set(ok)
-    last.groups = last.groups.map((g) => ({ ...g, files: g.files.filter((f) => !gone.has(f.path)) })).filter((g) => g.files.length > 1)
+    last.groups = last.groups.map((g) => ({ ...g, files: g.files.filter((f) => !gone.has(f.path)) })).filter((g) => g.files.length > (g.kind === 'orphan' ? 0 : 1))
   }
   return { ok, failed }
 })
 const known = (p) => (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
+  || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
 ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemInFolder(String(p)) })
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)
