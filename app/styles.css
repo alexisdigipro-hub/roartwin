@@ -190,3 +190,15 @@ main { flex: 1; min-height: 0; overflow: auto; }
 .verdict .paths .dest span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .verdict .paths { white-space: normal; }
 .f-meta .chip.tint { white-space: normal; height: auto; min-height: 22px; padding: 3px 9px; }
+/* Make a twin's naming rule: four pill fields and the folder it makes (Alex, 25 Oct) */
+.naming { display: grid; gap: 8px; padding: 4px 0 6px; }
+.nf-row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr; gap: 8px; }
+.nf { display: grid; gap: 4px; min-width: 0; }
+.nf small { color: var(--muted); font-size: 11.5px; padding-left: 12px; }
+.nf input { height: 36px; min-width: 0; padding: 0 14px; border-radius: 999px; border: 1px solid var(--edge); background: rgba(0,0,0,.25); outline: none; }
+.nf input:focus { border-color: color-mix(in srgb, var(--acc) 55%, transparent); }
+.nf-prev { color: var(--muted); font-size: 12.5px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: 12px; }
+.verdict .card-name { color: var(--muted); font-size: 12.5px; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drop.set { border-style: solid; border-color: color-mix(in srgb, var(--ok) 35%, transparent); }
+.modes + .modes { margin-top: -6px; }
+@media (max-width: 760px) { .nf-row { grid-template-columns: 1fr 1fr; } }

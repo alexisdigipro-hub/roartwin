@@ -49,7 +49,7 @@ const num = (n) => n.toLocaleString('en-US')
 const plural = (n, one, many = one + 's') => { const w = S.lang === 'el' && EL_WORDS[one]; return `${num(n)} ${n === 1 ? (w ? w[0] : one) : (w ? w[1] : many)}` }
 const dateOf = (ms) => new Date(ms).toLocaleDateString(S.lang === 'el' ? 'el-GR' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
 /* Ελληνικά (Alex, 25 Oct): English unless Greek is chosen under Language; each English text is its own key */
-const EL = {"A WAV and its MP3 or M4A: RoarTwin listens to the sound itself.": "Ένα WAV και το MP3 ή M4A του: το RoarTwin ακούει τον ίδιο τον ήχο.", "A card or a shoot copied twice shows as one folder, not file by file.": "Μια κάρτα ή ένα γύρισμα αντιγραμμένο δύο φορές φαίνεται ως ένας φάκελος, όχι αρχείο αρχείο.", "A card, a shoot, a drive.": "Μια κάρτα, ένα γύρισμα, ένας δίσκος.", "A proxy is never taken for a twin of its original. Proxies whose original is not in these folders are listed apart.": "Ένα proxy δεν θεωρείται ποτέ διπλό του original του. Τα proxies που δεν έχουν original σε αυτούς τους φακέλους φαίνονται χωριστά.", "A shoot, an archive, a whole disk. Nothing is changed until you choose. The lock marks a folder as Masters.": "Ένα γύρισμα, ένα αρχείο, ολόκληρος δίσκος. Τίποτα δεν αλλάζει μέχρι να διαλέξεις εσύ. Το λουκέτο κάνει έναν φάκελο Masters.", "A trim or a teaser cut out of a longer video, and where it starts. Slower: every video is read through.": "Ένα κομμάτι ή ένα teaser κομμένο από μεγαλύτερο βίντεο, και πού ξεκινάει. Πιο αργό: διαβάζει κάθε βίντεο ολόκληρο.", "All <b>tidy</b>.": "Όλα <b>τακτοποιημένα</b>.", "All": "Όλα", "Also when it was exported again, in another size, codec or format. RoarTwin compares the pictures.": "Και όταν έχει γίνει ξανά export, σε άλλο μέγεθος, codec ή format. Το RoarTwin συγκρίνει την εικόνα.", "Any": "Όλα", "At the same place on the backup": "Στην ίδια θέση στο backup", "Audio only: WAV, AIFF, MP3, M4A, FLAC and more.": "Μόνο ήχος: WAV, AIFF, MP3, M4A, FLAC και άλλα.", "Audio": "Ήχος", "Back": "Πίσω", "Backup check": "Έλεγχος backup", "Cancel": "Άκυρο", "Check a backup": "Έλεγχος backup", "Check stopped.": "Ο έλεγχος σταμάτησε.", "Check the backup": "Έλεγξε το backup", "Choose a folder or a drive.": "Διάλεξε φάκελο ή δίσκο.", "Choose another…": "Διάλεξε άλλον…", "Choose folders…": "Διάλεξε φακέλους…", "Choose…": "Διάλεξε…", "Chosen": "Επιλεγμένο", "Clear": "Καθαρισμός", "Codec": "Codec", "Comparing sizes and samples": "Σύγκριση μεγεθών και δειγμάτων", "Comparing": "Σύγκριση", "Different on the backup": "Διαφορετικό στο backup", "Drop a folder or a drive here": "Ρίξε εδώ έναν φάκελο ή δίσκο", "Drop folders or drives, not single files.": "Ρίξε φακέλους ή δίσκους, όχι μεμονωμένα αρχεία.", "Drop more folders or drives": "Ρίξε κι άλλους φακέλους ή δίσκους", "Every file": "Όλα τα αρχεία", "Every kind of file: videos, photos, sound, projects.": "Κάθε είδος αρχείου: βίντεο, φωτογραφίες, ήχος, projects.", "Everything is on the <b>backup</b>.": "Όλα είναι στο <b>backup</b>.", "Exact copies": "Ίδια αντίγραφα", "Exact copy": "Ίδιο αντίγραφο", "Export the list (CSV)": "Εξαγωγή λίστας (CSV)", "Export": "Εξαγωγή", "Find the <b>twins</b>.": "Βρες τα <b>διπλά</b>.", "Find twins": "Βρες τα διπλά", "Folder": "Φάκελος", "Folders": "Φάκελοι", "Found files go to the Trash only when you say so, and one of each always stays.": "Τα αρχεία πάνε στον Κάδο μόνο όταν το πεις εσύ, και ένα από κάθε ομάδα μένει πάντα.", "Group": "Ομάδα", "Images only: JPG, PNG, HEIC, TIFF, PSD and camera RAW (CR3, NEF, ARW, DNG…).": "Μόνο εικόνες: JPG, PNG, HEIC, TIFF, PSD και RAW κάμερας (CR3, NEF, ARW, DNG…).", "Images": "Εικόνες", "In a Masters folder: it stays": "Σε φάκελο Masters: μένει", "Is it all on the <b>backup</b>?": "Είναι όλα στο <b>backup</b>;", "Keep all": "Κράτα όλα", "Keep it": "Κράτα το", "Keep the suggested one": "Κράτα το προτεινόμενο", "Keep · Masters": "Μένει · Masters", "Keep": "Μένει", "Kind": "Είδος", "Language": "Γλώσσα", "The words of the app.": "Η γλώσσα της εφαρμογής.", "Leave editing proxies alone": "Άφησε ήσυχα τα proxies του μοντάζ", "Length": "Διάρκεια", "List saved": "Η λίστα αποθηκεύτηκε", "Listening": "Ακρόαση", "Listing the files": "Καταγραφή αρχείων", "Listing": "Καταγραφή", "Look for": "Ψάξε για", "Looking at the photos": "Κοιτάζει τις φωτογραφίες", "Looking at the pictures": "Κοιτάζει την εικόνα", "Looking for whole folders twice": "Ψάχνει ολόκληρους φακέλους δύο φορές", "Making the previews": "Φτιάχνει τις προεπισκοπήσεις", "Mark as Masters: nothing here is ever offered for the Trash": "Κάνε τον Masters: τίποτα από εδώ δεν προτείνεται ποτέ για τον Κάδο", "Masters: nothing here goes to the Trash. Click to unmark.": "Masters: τίποτα από εδώ δεν πάει στον Κάδο. Πάτα για να το βγάλεις.", "Masters": "Masters", "Modified": "Τροποποίηση", "Move to Trash": "Στον Κάδο", "Move to the Trash": "Στον Κάδο", "Name": "Όνομα", "New check": "Νέος έλεγχος", "New scan": "Νέο ψάξιμο", "No <b>twins</b> here.": "Δεν υπάρχουν <b>διπλά</b> εδώ.", "Not on the backup": "Δεν είναι στο backup", "Nothing is changed: RoarTwin only reads both sides.": "Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει και τις δύο πλευρές.", "One of each stays": "Ένα από κάθε ομάδα μένει", "Open": "Άνοιγμα", "Part of a longer video": "Κομμάτι μεγαλύτερου βίντεο", "Parts of longer videos": "Κομμάτια μεγαλύτερων βίντεο", "Parts": "Κομμάτια", "Photos": "Φωτογραφίες", "Picture": "Εικόνα", "Pictures": "Εικόνα", "Previews": "Προεπισκοπήσεις", "Problem": "Πρόβλημα", "Proxies": "Proxies", "Proxy with no original here": "Proxy χωρίς original εδώ", "Proxy": "Proxy", "Reading both sides, byte for byte": "Διαβάζει και τις δύο πλευρές, byte προς byte", "Reading the possible copies": "Διαβάζει τα πιθανά αντίγραφα", "Reading the sound files": "Διαβάζει τα αρχεία ήχου", "Reading the videos through": "Διαβάζει τα βίντεο ολόκληρα", "Reading the videos": "Διαβάζει τα βίντεο", "Reading": "Ανάγνωση", "Restart to update": "Επανεκκίνηση για ενημέρωση", "RoarTwin finds the same file twice, whatever its name, and the same video in another size or format, so you keep one and free the space.": "Το RoarTwin βρίσκει το ίδιο αρχείο δύο φορές, όποιο όνομα κι αν έχει, και το ίδιο βίντεο σε άλλο μέγεθος ή format, για να κρατήσεις ένα και να ελευθερώσεις χώρο.", "RoarTwin looks for every file of the originals on the backup by what it holds, byte for byte, wherever it sits and whatever it is called, and lists what is missing or different.": "Το RoarTwin ψάχνει κάθε αρχείο των originals στο backup με βάση το περιεχόμενό του, byte προς byte, όπου κι αν βρίσκεται και όπως κι αν λέγεται, και δείχνει τι λείπει ή τι διαφέρει.", "Same folder twice": "Ίδιος φάκελος δύο φορές", "Same sound, other files": "Ίδιος ήχος, άλλα αρχεία", "Same video": "Ίδιο βίντεο", "Same video, other files": "Ίδιο βίντεο, άλλα αρχεία", "Scan stopped.": "Το ψάξιμο σταμάτησε.", "Show in Explorer": "Εμφάνιση στον Explorer", "Show in Finder": "Εμφάνιση στο Finder", "Show the one on the backup": "Δείξε αυτό που είναι στο backup", "Similar photos": "Παρόμοιες φωτογραφίες", "Size (bytes)": "Μέγεθος (bytes)", "Skip cloud drives": "Παράλειψη cloud", "Skip hidden and system folders": "Παράλειψη κρυφών φακέλων και φακέλων συστήματος", "Smaller files are left out.": "Τα μικρότερα αρχεία παραλείπονται.", "Smallest file": "Μικρότερο αρχείο", "Sound": "Ήχος", "Starting": "Ξεκινάει", "Stop": "Διακοπή", "Stopping…": "Σταματάει…", "Suggested": "Πρόταση", "The backup": "Το backup", "The originals": "Τα originals", "The same photo saved again or resized, and shots of a burst that are nearly alike.": "Η ίδια φωτογραφία σωσμένη ξανά ή σε άλλο μέγεθος, και λήψεις από burst που είναι σχεδόν ίδιες.", "The same sound in another file": "Ο ίδιος ήχος σε άλλο αρχείο", "The same video in another file": "Το ίδιο βίντεο σε άλλο αρχείο", "The system, the apps, the Trash, and libraries like Photos or Final Cut.": "Το σύστημα, οι εφαρμογές, ο Κάδος, και βιβλιοθήκες όπως το Photos ή το Final Cut.", "Trash": "Κάδος", "Twins": "Διπλά", "Videos only: MOV, MP4, MXF, MKV, AVI and more.": "Μόνο βίντεο: MOV, MP4, MXF, MKV, AVI και άλλα.", "Videos": "Βίντεο", "Where they should all be.": "Εκεί που πρέπει να είναι όλα.", "Whole folders twice": "Ολόκληροι φάκελοι δύο φορές", "pCloud, iCloud, Dropbox, Google Drive, OneDrive: their files live online, and reading them downloads them. A cloud folder you choose yourself is still looked in.": "pCloud, iCloud, Dropbox, Google Drive, OneDrive: τα αρχεία τους είναι online, και για να διαβαστούν κατεβαίνουν. Έναν φάκελο cloud που διαλέγεις μόνος σου τον ψάχνει κανονικά.", "the oldest": "το παλιότερο", "the best picture": "η καλύτερη εικόνα", "the full video": "το πλήρες βίντεο", "the most pixels": "τα περισσότερα pixels", "the best quality": "η καλύτερη ποιότητα", "{n} each": "{n} το καθένα", "{a} of {b}": "{a} από {b}", "{size} will be freed when you empty the Trash. One file of each group stays where it is.": "{size} θα ελευθερωθούν όταν αδειάσεις τον Κάδο. Ένα αρχείο από κάθε ομάδα μένει εκεί που είναι.", "{n} missing": "{n} λείπουν", "{a} of {b} safe · {c}": "{a} από {b} ασφαλή · {c}", "{n} different on the backup": "{n} διαφορετικά στο backup", "{a} of {b} files with a twin in size": "{a} από {b} αρχεία με ίδιο μέγεθος", "{a} of {b}: length, format": "{a} από {b}: διάρκεια, format", "{a} of {b} of about the same length": "{a} από {b} με περίπου ίδια διάρκεια", "{a} of {b}: length, size, codec": "{a} από {b}: διάρκεια, μέγεθος, codec", "{a} of {b}, one frame a second": "{a} από {b}, ένα καρέ το δευτερόλεπτο", "{n} is <b>not</b> on the backup.": "{n} <b>δεν</b> είναι στο backup.", "{n} are <b>not</b> on the backup.": "{n} <b>δεν</b> είναι στο backup.", "{n} of twins": "{n} με διπλά", "{n} so far": "{n} ως τώρα", "{n} could not be moved: {e}": "{n} δεν μετακινήθηκαν: {e}", "{n} looked at in {t}": "{n} ελέγχθηκαν σε {t}", "{n} looked at": "{n} ελέγχθηκαν", ", {n} in the Trash": ", {n} στον Κάδο", "{n} moved to the Trash": "{n} πήγαν στον Κάδο", "Cloud left out: {n}": "Cloud που παραλείφθηκε: {n}", "Keep · {w}": "Μένει · {w}", "Masters kept safe: {n}": "Masters, ασφαλή: {n}", "Move {n} to the Trash?": "Στον Κάδο {n};", "Part · from {t}": "Κομμάτι · από {t}", "Show {n} more": "Δείξε {n} ακόμα", "checked byte for byte in {t}": "ελέγχθηκαν byte προς byte σε {t}", "starts at {t} in {n}": "ξεκινάει στο {t} του {n}", "the longer one": "μεγαλύτερου", "up to {n} to free": "έως {n} για ελευθέρωση", "its original is not in these folders": "το original του δεν είναι σε αυτούς τους φακέλους", "Make a twin": "Φτιάξε δίδυμο", "A <b>twin</b> of the card.": "Ένα <b>δίδυμο</b> της κάρτας.", "RoarTwin copies a card to one or more drives at once, then reads every copy back and checks it against the card, byte for byte, so nothing arrives corrupted.": "Το RoarTwin αντιγράφει μια κάρτα σε έναν ή περισσότερους δίσκους μαζί, μετά ξαναδιαβάζει κάθε αντίγραφο και το ελέγχει με την κάρτα, byte προς byte, για να μη φτάσει τίποτα χαλασμένο.", "The card": "Η κάρτα", "The folder or card to copy.": "Ο φάκελος ή η κάρτα που αντιγράφεται.", "Copy to": "Αντιγραφή σε", "One drive, or two at once.": "Ένας δίσκος, ή δύο μαζί.", "Add a drive…": "Πρόσθεσε δίσκο…", "Copy and check": "Αντιγραφή και έλεγχος", "Nothing is written over or deleted. The card keeps its folder name, the clips keep their dates, and each copy gets a report.": "Τίποτα δεν γράφεται από πάνω και τίποτα δεν σβήνεται. Η κάρτα κρατάει το όνομα του φακέλου της, τα clips τις ημερομηνίες τους, και κάθε αντίγραφο παίρνει ένα report.", "Copying": "Αντιγραφή", "Checking": "Έλεγχος", "Copying to every drive at once": "Αντιγράφει σε όλους τους δίσκους μαζί", "Reading every copy back": "Ξαναδιαβάζει κάθε αντίγραφο", "Copy stopped. What was half copied was taken away.": "Η αντιγραφή σταμάτησε. Ό,τι είχε αντιγραφεί μισό αφαιρέθηκε.", "New copy": "Νέα αντιγραφή", "Copied and <b>checked</b>.": "Αντιγράφηκε και <b>ελέγχθηκε</b>.", "{n} did <b>not</b> copy right.": "{n} <b>δεν</b> αντιγράφηκαν σωστά.", "{a} of {b} checked on every drive · {c}": "{a} από {b} ελεγμένα σε κάθε δίσκο · {c}", "{n} were already there": "{n} υπήρχαν ήδη", "in {t}": "σε {t}", "Show report": "Δείξε το report", "Choose a drive or a folder.": "Διάλεξε δίσκο ή φάκελο.", "Remove": "Αφαίρεση", "1 file did <b>not</b> copy right.": "1 αρχείο <b>δεν</b> αντιγράφηκε σωστά.", "1 file was already there": "1 αρχείο υπήρχε ήδη", "{n} missing (one)": "{n} λείπει", "{n} different on the backup (one)": "{n} διαφορετικό στο backup", "The copy is not the same as the card (corrupted on the way). Copy it again.": "Το αντίγραφο δεν είναι ίδιο με την κάρτα (χάλασε στη διαδρομή). Αντίγραψέ το ξανά.", "A different file with this name is already there; it was left alone.": "Υπάρχει ήδη άλλο αρχείο με αυτό το όνομα· δεν το πείραξε.", "At least one file of each group stays.": "Ένα αρχείο από κάθε ομάδα μένει πάντα.", "It is in a Masters folder.": "Είναι σε φάκελο Masters."}
+const EL = {"A WAV and its MP3 or M4A: RoarTwin listens to the sound itself.": "Ένα WAV και το MP3 ή M4A του: το RoarTwin ακούει τον ίδιο τον ήχο.", "A card or a shoot copied twice shows as one folder, not file by file.": "Μια κάρτα ή ένα γύρισμα αντιγραμμένο δύο φορές φαίνεται ως ένας φάκελος, όχι αρχείο αρχείο.", "A card, a shoot, a drive.": "Μια κάρτα, ένα γύρισμα, ένας δίσκος.", "A proxy is never taken for a twin of its original. Proxies whose original is not in these folders are listed apart.": "Ένα proxy δεν θεωρείται ποτέ διπλό του original του. Τα proxies που δεν έχουν original σε αυτούς τους φακέλους φαίνονται χωριστά.", "A shoot, an archive, a whole disk. Nothing is changed until you choose. The lock marks a folder as Masters.": "Ένα γύρισμα, ένα αρχείο, ολόκληρος δίσκος. Τίποτα δεν αλλάζει μέχρι να διαλέξεις εσύ. Το λουκέτο κάνει έναν φάκελο Masters.", "A trim or a teaser cut out of a longer video, and where it starts. Slower: every video is read through.": "Ένα κομμάτι ή ένα teaser κομμένο από μεγαλύτερο βίντεο, και πού ξεκινάει. Πιο αργό: διαβάζει κάθε βίντεο ολόκληρο.", "All <b>tidy</b>.": "Όλα <b>τακτοποιημένα</b>.", "All": "Όλα", "Also when it was exported again, in another size, codec or format. RoarTwin compares the pictures.": "Και όταν έχει γίνει ξανά export, σε άλλο μέγεθος, codec ή format. Το RoarTwin συγκρίνει την εικόνα.", "Any": "Όλα", "At the same place on the backup": "Στην ίδια θέση στο backup", "Audio only: WAV, AIFF, MP3, M4A, FLAC and more.": "Μόνο ήχος: WAV, AIFF, MP3, M4A, FLAC και άλλα.", "Audio": "Ήχος", "Back": "Πίσω", "Backup check": "Έλεγχος backup", "Cancel": "Άκυρο", "Check a backup": "Έλεγχος backup", "Check stopped.": "Ο έλεγχος σταμάτησε.", "Check the backup": "Έλεγξε το backup", "Choose a folder or a drive.": "Διάλεξε φάκελο ή δίσκο.", "Choose another…": "Διάλεξε άλλον…", "Choose folders…": "Διάλεξε φακέλους…", "Choose…": "Διάλεξε…", "Chosen": "Επιλεγμένο", "Clear": "Καθαρισμός", "Codec": "Codec", "Comparing sizes and samples": "Σύγκριση μεγεθών και δειγμάτων", "Comparing": "Σύγκριση", "Different on the backup": "Διαφορετικό στο backup", "Drop a folder or a drive here": "Ρίξε εδώ έναν φάκελο ή δίσκο", "Drop folders or drives, not single files.": "Ρίξε φακέλους ή δίσκους, όχι μεμονωμένα αρχεία.", "Drop more folders or drives": "Ρίξε κι άλλους φακέλους ή δίσκους", "Every file": "Όλα τα αρχεία", "Every kind of file: videos, photos, sound, projects.": "Κάθε είδος αρχείου: βίντεο, φωτογραφίες, ήχος, projects.", "Everything is on the <b>backup</b>.": "Όλα είναι στο <b>backup</b>.", "Exact copies": "Ίδια αντίγραφα", "Exact copy": "Ίδιο αντίγραφο", "Export the list (CSV)": "Εξαγωγή λίστας (CSV)", "Export": "Εξαγωγή", "Find the <b>twins</b>.": "Βρες τα <b>διπλά</b>.", "Find twins": "Βρες τα διπλά", "Folder": "Φάκελος", "Folders": "Φάκελοι", "Found files go to the Trash only when you say so, and one of each always stays.": "Τα αρχεία πάνε στον Κάδο μόνο όταν το πεις εσύ, και ένα από κάθε ομάδα μένει πάντα.", "Group": "Ομάδα", "Images only: JPG, PNG, HEIC, TIFF, PSD and camera RAW (CR3, NEF, ARW, DNG…).": "Μόνο εικόνες: JPG, PNG, HEIC, TIFF, PSD και RAW κάμερας (CR3, NEF, ARW, DNG…).", "Images": "Εικόνες", "In a Masters folder: it stays": "Σε φάκελο Masters: μένει", "Is it all on the <b>backup</b>?": "Είναι όλα στο <b>backup</b>;", "Keep all": "Κράτα όλα", "Keep it": "Κράτα το", "Keep the suggested one": "Κράτα το προτεινόμενο", "Keep · Masters": "Μένει · Masters", "Keep": "Μένει", "Kind": "Είδος", "Language": "Γλώσσα", "The words of the app.": "Η γλώσσα της εφαρμογής.", "Leave editing proxies alone": "Άφησε ήσυχα τα proxies του μοντάζ", "Length": "Διάρκεια", "List saved": "Η λίστα αποθηκεύτηκε", "Listening": "Ακρόαση", "Listing the files": "Καταγραφή αρχείων", "Listing": "Καταγραφή", "Look for": "Ψάξε για", "Looking at the photos": "Κοιτάζει τις φωτογραφίες", "Looking at the pictures": "Κοιτάζει την εικόνα", "Looking for whole folders twice": "Ψάχνει ολόκληρους φακέλους δύο φορές", "Making the previews": "Φτιάχνει τις προεπισκοπήσεις", "Mark as Masters: nothing here is ever offered for the Trash": "Κάνε τον Masters: τίποτα από εδώ δεν προτείνεται ποτέ για τον Κάδο", "Masters: nothing here goes to the Trash. Click to unmark.": "Masters: τίποτα από εδώ δεν πάει στον Κάδο. Πάτα για να το βγάλεις.", "Masters": "Masters", "Modified": "Τροποποίηση", "Move to Trash": "Στον Κάδο", "Move to the Trash": "Στον Κάδο", "Name": "Όνομα", "New check": "Νέος έλεγχος", "New scan": "Νέο ψάξιμο", "No <b>twins</b> here.": "Δεν υπάρχουν <b>διπλά</b> εδώ.", "Not on the backup": "Δεν είναι στο backup", "Nothing is changed: RoarTwin only reads both sides.": "Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει και τις δύο πλευρές.", "One of each stays": "Ένα από κάθε ομάδα μένει", "Open": "Άνοιγμα", "Part of a longer video": "Κομμάτι μεγαλύτερου βίντεο", "Parts of longer videos": "Κομμάτια μεγαλύτερων βίντεο", "Parts": "Κομμάτια", "Photos": "Φωτογραφίες", "Picture": "Εικόνα", "Pictures": "Εικόνα", "Previews": "Προεπισκοπήσεις", "Problem": "Πρόβλημα", "Proxies": "Proxies", "Proxy with no original here": "Proxy χωρίς original εδώ", "Proxy": "Proxy", "Reading both sides, byte for byte": "Διαβάζει και τις δύο πλευρές, byte προς byte", "Reading the possible copies": "Διαβάζει τα πιθανά αντίγραφα", "Reading the sound files": "Διαβάζει τα αρχεία ήχου", "Reading the videos through": "Διαβάζει τα βίντεο ολόκληρα", "Reading the videos": "Διαβάζει τα βίντεο", "Reading": "Ανάγνωση", "Restart to update": "Επανεκκίνηση για ενημέρωση", "RoarTwin finds the same file twice, whatever its name, and the same video in another size or format, so you keep one and free the space.": "Το RoarTwin βρίσκει το ίδιο αρχείο δύο φορές, όποιο όνομα κι αν έχει, και το ίδιο βίντεο σε άλλο μέγεθος ή format, για να κρατήσεις ένα και να ελευθερώσεις χώρο.", "RoarTwin looks for every file of the originals on the backup by what it holds, byte for byte, wherever it sits and whatever it is called, and lists what is missing or different.": "Το RoarTwin ψάχνει κάθε αρχείο των originals στο backup με βάση το περιεχόμενό του, byte προς byte, όπου κι αν βρίσκεται και όπως κι αν λέγεται, και δείχνει τι λείπει ή τι διαφέρει.", "Same folder twice": "Ίδιος φάκελος δύο φορές", "Same sound, other files": "Ίδιος ήχος, άλλα αρχεία", "Same video": "Ίδιο βίντεο", "Same video, other files": "Ίδιο βίντεο, άλλα αρχεία", "Scan stopped.": "Το ψάξιμο σταμάτησε.", "Show in Explorer": "Εμφάνιση στον Explorer", "Show in Finder": "Εμφάνιση στο Finder", "Show the one on the backup": "Δείξε αυτό που είναι στο backup", "Similar photos": "Παρόμοιες φωτογραφίες", "Size (bytes)": "Μέγεθος (bytes)", "Skip cloud drives": "Παράλειψη cloud", "Skip hidden and system folders": "Παράλειψη κρυφών φακέλων και φακέλων συστήματος", "Smaller files are left out.": "Τα μικρότερα αρχεία παραλείπονται.", "Smallest file": "Μικρότερο αρχείο", "Sound": "Ήχος", "Starting": "Ξεκινάει", "Stop": "Διακοπή", "Stopping…": "Σταματάει…", "Suggested": "Πρόταση", "The backup": "Το backup", "The originals": "Τα originals", "The same photo saved again or resized, and shots of a burst that are nearly alike.": "Η ίδια φωτογραφία σωσμένη ξανά ή σε άλλο μέγεθος, και λήψεις από burst που είναι σχεδόν ίδιες.", "The same sound in another file": "Ο ίδιος ήχος σε άλλο αρχείο", "The same video in another file": "Το ίδιο βίντεο σε άλλο αρχείο", "The system, the apps, the Trash, and libraries like Photos or Final Cut.": "Το σύστημα, οι εφαρμογές, ο Κάδος, και βιβλιοθήκες όπως το Photos ή το Final Cut.", "Trash": "Κάδος", "Twins": "Διπλά", "Videos only: MOV, MP4, MXF, MKV, AVI and more.": "Μόνο βίντεο: MOV, MP4, MXF, MKV, AVI και άλλα.", "Videos": "Βίντεο", "Where they should all be.": "Εκεί που πρέπει να είναι όλα.", "Whole folders twice": "Ολόκληροι φάκελοι δύο φορές", "pCloud, iCloud, Dropbox, Google Drive, OneDrive: their files live online, and reading them downloads them. A cloud folder you choose yourself is still looked in.": "pCloud, iCloud, Dropbox, Google Drive, OneDrive: τα αρχεία τους είναι online, και για να διαβαστούν κατεβαίνουν. Έναν φάκελο cloud που διαλέγεις μόνος σου τον ψάχνει κανονικά.", "the oldest": "το παλιότερο", "the best picture": "η καλύτερη εικόνα", "the full video": "το πλήρες βίντεο", "the most pixels": "τα περισσότερα pixels", "the best quality": "η καλύτερη ποιότητα", "{n} each": "{n} το καθένα", "{a} of {b}": "{a} από {b}", "{size} will be freed when you empty the Trash. One file of each group stays where it is.": "{size} θα ελευθερωθούν όταν αδειάσεις τον Κάδο. Ένα αρχείο από κάθε ομάδα μένει εκεί που είναι.", "{n} missing": "{n} λείπουν", "{a} of {b} safe · {c}": "{a} από {b} ασφαλή · {c}", "{n} different on the backup": "{n} διαφορετικά στο backup", "{a} of {b} files with a twin in size": "{a} από {b} αρχεία με ίδιο μέγεθος", "{a} of {b}: length, format": "{a} από {b}: διάρκεια, format", "{a} of {b} of about the same length": "{a} από {b} με περίπου ίδια διάρκεια", "{a} of {b}: length, size, codec": "{a} από {b}: διάρκεια, μέγεθος, codec", "{a} of {b}, one frame a second": "{a} από {b}, ένα καρέ το δευτερόλεπτο", "{n} is <b>not</b> on the backup.": "{n} <b>δεν</b> είναι στο backup.", "{n} are <b>not</b> on the backup.": "{n} <b>δεν</b> είναι στο backup.", "{n} of twins": "{n} με διπλά", "{n} so far": "{n} ως τώρα", "{n} could not be moved: {e}": "{n} δεν μετακινήθηκαν: {e}", "{n} looked at in {t}": "{n} ελέγχθηκαν σε {t}", "{n} looked at": "{n} ελέγχθηκαν", ", {n} in the Trash": ", {n} στον Κάδο", "{n} moved to the Trash": "{n} πήγαν στον Κάδο", "Cloud left out: {n}": "Cloud που παραλείφθηκε: {n}", "Keep · {w}": "Μένει · {w}", "Masters kept safe: {n}": "Masters, ασφαλή: {n}", "Move {n} to the Trash?": "Στον Κάδο {n};", "Part · from {t}": "Κομμάτι · από {t}", "Show {n} more": "Δείξε {n} ακόμα", "checked byte for byte in {t}": "ελέγχθηκαν byte προς byte σε {t}", "starts at {t} in {n}": "ξεκινάει στο {t} του {n}", "the longer one": "μεγαλύτερου", "up to {n} to free": "έως {n} για ελευθέρωση", "its original is not in these folders": "το original του δεν είναι σε αυτούς τους φακέλους", "Make a twin": "Φτιάξε δίδυμο", "A <b>twin</b> of the card.": "Ένα <b>δίδυμο</b> της κάρτας.", "RoarTwin copies a card to one or more drives at once, then reads every copy back and checks it against the card, byte for byte, so nothing arrives corrupted.": "Το RoarTwin αντιγράφει μια κάρτα σε έναν ή περισσότερους δίσκους μαζί, μετά ξαναδιαβάζει κάθε αντίγραφο και το ελέγχει με την κάρτα, byte προς byte, για να μη φτάσει τίποτα χαλασμένο.", "The card": "Η κάρτα", "The folder or card to copy.": "Ο φάκελος ή η κάρτα που αντιγράφεται.", "Copy to": "Αντιγραφή σε", "One drive, or two at once.": "Ένας δίσκος, ή δύο μαζί.", "Add a drive…": "Πρόσθεσε δίσκο…", "Copy and check": "Αντιγραφή και έλεγχος", "Nothing is written over or deleted. The card keeps its folder name, the clips keep their dates, and each copy gets a report.": "Τίποτα δεν γράφεται από πάνω και τίποτα δεν σβήνεται. Η κάρτα κρατάει το όνομα του φακέλου της, τα clips τις ημερομηνίες τους, και κάθε αντίγραφο παίρνει ένα report.", "Copying": "Αντιγραφή", "Checking": "Έλεγχος", "Copying to every drive at once": "Αντιγράφει σε όλους τους δίσκους μαζί", "Reading every copy back": "Ξαναδιαβάζει κάθε αντίγραφο", "Copy stopped. What was half copied was taken away.": "Η αντιγραφή σταμάτησε. Ό,τι είχε αντιγραφεί μισό αφαιρέθηκε.", "New copy": "Νέα αντιγραφή", "Copied and <b>checked</b>.": "Αντιγράφηκε και <b>ελέγχθηκε</b>.", "{n} did <b>not</b> copy right.": "{n} <b>δεν</b> αντιγράφηκαν σωστά.", "{a} of {b} checked on every drive · {c}": "{a} από {b} ελεγμένα σε κάθε δίσκο · {c}", "{n} were already there": "{n} υπήρχαν ήδη", "in {t}": "σε {t}", "Show report": "Δείξε το report", "Choose a drive or a folder.": "Διάλεξε δίσκο ή φάκελο.", "Remove": "Αφαίρεση", "1 file did <b>not</b> copy right.": "1 αρχείο <b>δεν</b> αντιγράφηκε σωστά.", "1 file was already there": "1 αρχείο υπήρχε ήδη", "{n} missing (one)": "{n} λείπει", "{n} different on the backup (one)": "{n} διαφορετικό στο backup", "The copy is not the same as the card (corrupted on the way). Copy it again.": "Το αντίγραφο δεν είναι ίδιο με την κάρτα (χάλασε στη διαδρομή). Αντίγραψέ το ξανά.", "A different file with this name is already there; it was left alone.": "Υπάρχει ήδη άλλο αρχείο με αυτό το όνομα· δεν το πείραξε.", "At least one file of each group stays.": "Ένα αρχείο από κάθε ομάδα μένει πάντα.", "It is in a Masters folder.": "Είναι σε φάκελο Masters.", "Copy a card as soon as it is in": "Αντιγραφή κάρτας μόλις μπει", "When a camera card is put in, RoarTwin offers to copy it to these drives. Several cards wait their turn.": "Όταν μπαίνει κάρτα κάμερας, το RoarTwin προτείνει να την αντιγράψει σε αυτούς τους δίσκους. Πολλές κάρτες περιμένουν τη σειρά τους.", "Name the folders": "Ονόματα φακέλων", "Date_Project / Day / Camera_Card on every drive; the card number goes up by itself, the day too on a new date.": "Ημερομηνία_Project / Day / Κάμερα_Κάρτα σε κάθε δίσκο· ο αριθμός κάρτας ανεβαίνει μόνος του, και η μέρα σε νέα ημερομηνία.", "Project": "Project", "Day": "Day", "Camera": "Κάμερα", "Card": "Κάρτα", "A card is in: {n}": "Μπήκε κάρτα: {n}", "Copy it to {d} and check every copy?": "Να αντιγραφεί στο {d} και να ελεγχθεί κάθε αντίγραφο;", "Not now": "Όχι τώρα", "A card is in: {n}. Choose where it is copied.": "Μπήκε κάρτα: {n}. Διάλεξε πού θα αντιγραφεί.", "{n} waits its turn.": "Η {n} περιμένει τη σειρά της.", "Waiting: {n}": "Περιμένουν: {n}", "Against the originals": "Με τα originals", "Against its copy report": "Με το report της αντιγραφής", "The copy": "Το αντίγραφο", "A folder a twin was made in: its report says what every file held on the day.": "Ένας φάκελος όπου έγινε δίδυμο: το report του λέει τι είχε κάθε αρχείο εκείνη τη μέρα.", "Check against the report": "Έλεγχος με το report", "Has the <b>drive</b> kept it all?": "Τα κράτησε όλα ο <b>δίσκος</b>;", "Drives go bad on the shelf without a sound. RoarTwin reads the copy again and compares every file with the report written the day it was copied.": "Οι δίσκοι χαλάνε στο ράφι χωρίς να το καταλάβεις. Το RoarTwin ξαναδιαβάζει το αντίγραφο και συγκρίνει κάθε αρχείο με το report της μέρας που αντιγράφηκε.", "Nothing has changed since {w}.": "Τίποτα δεν άλλαξε από {w}.", "Nothing has changed since it was copied.": "Τίποτα δεν άλλαξε από την αντιγραφή.", "{n} have changed or gone since {w}.": "{n} άλλαξαν ή χάθηκαν από {w}.", "{n} changed": "{n} άλλαξαν", "{n} gone": "{n} χάθηκαν", "Changed since it was copied": "Άλλαξε από την αντιγραφή", "No longer there": "Δεν υπάρχει πια", "Report": "Report", "There is no RoarTwin copy report in this folder. Choose the folder a twin was made in.": "Δεν υπάρχει report του RoarTwin σε αυτόν τον φάκελο. Διάλεξε τον φάκελο όπου έγινε το δίδυμο."}
 const t = (text, vars) => { let o = (S.lang === 'el' && EL[text]) || text; if (vars) o = o.replace(/\{(\w+)\}/g, (_, k) => vars[k] ?? ''); return o }
 const EL_WORDS = { file: ['αρχείο', 'αρχεία'], folder: ['φάκελος', 'φάκελοι'], video: ['βίντεο', 'βίντεο'], photo: ['φωτογραφία', 'φωτογραφίες'], group: ['ομάδα', 'ομάδες'] }
 
@@ -81,17 +81,20 @@ const switchEl = (on, onFlip, label) => h('button', { type: 'button', class: 'sw
 const S = {
   view: 'home',
   roots: store.get('roots', []),
-  opts: { videosOnly: false, similar: true, minSize: 0, skipHidden: true, skipCloud: true, folders: true, parts: false, photos: true, sounds: true, proxies: true, ...store.get('opts', {}) },
+  opts: { autoCard: true, naming: false, videosOnly: false, similar: true, minSize: 0, skipHidden: true, skipCloud: true, folders: true, parts: false, photos: true, sounds: true, proxies: true, ...store.get('opts', {}) },
   // Alex, 25 Oct: folders marked Masters (never offered for the Trash), and the backup check's two folders
   protect: store.get('protect', []),
   lang: store.get('lang', 'en'),
   mode: store.get('mode', 'twins'), source: store.get('source', ''), backup: store.get('backup', ''), bres: null,
-  card: store.get('card', ''), targets: store.get('targets', []), cres: null,
+  card: store.get('card', ''), targets: store.get('targets', []), cres: null, copies: [], queue: [],
+  // the naming rule's fields (Alex, 25 Oct): Date_Project/Day01/CamA_Card03
+  naming: { project: '', day: 1, cam: 'A', card: 1, lastDate: '', ...store.get('naming', {}) },
+  bmode: store.get('bmode', 'source'), copyDir: store.get('copyDir', ''),
   progress: null, stages: new Set(),
   result: null, filter: 'all', shown: 40, sel: new Set(), gone: new Set(),
   version: '', update: null,
 }
-const saveOpts = () => { store.set('roots', S.roots); store.set('opts', S.opts); store.set('protect', S.protect); store.set('mode', S.mode); store.set('source', S.source); store.set('backup', S.backup); store.set('lang', S.lang); store.set('card', S.card); store.set('targets', S.targets) }
+const saveOpts = () => { store.set('roots', S.roots); store.set('opts', S.opts); store.set('protect', S.protect); store.set('mode', S.mode); store.set('source', S.source); store.set('backup', S.backup); store.set('lang', S.lang); store.set('card', S.card); store.set('targets', S.targets); store.set('naming', S.naming); store.set('bmode', S.bmode); store.set('copyDir', S.copyDir) }
 /* what each kind of group is called, its colour, what the kept one is, and whether its copies come chosen */
 const KINDS = {
   exact: { label: 'Exact copy', tab: 'Exact copies', c: 'var(--acc)', keep: 'the oldest', pre: true },
@@ -165,6 +168,16 @@ async function addRoots(paths) {
   if (!add.length) { if (paths.length) toast(t('Drop folders or drives, not single files.')); return }
   S.roots = [...S.roots, ...add]; saveOpts(); draw()
 }
+// the naming rule's four fields and what the folder will be called
+function namingEl() {
+  const n = S.naming
+  const field = (k, label, attrs = {}) => h('label', { class: 'nf' }, h('small', {}, label),
+    h('input', { value: n[k], ...attrs, oninput: (e) => { n[k] = attrs.type === 'number' ? Math.max(1, parseInt(e.target.value, 10) || 1) : e.target.value; saveOpts(); prev.textContent = '→ ' + folderName() } }))
+  const prev = h('div', { class: 'nf-prev' }, '→ ' + folderName())
+  return h('div', { class: 'naming' },
+    h('div', { class: 'nf-row' }, field('project', t('Project'), { placeholder: 'Fakinos', class: 'wide' }), field('day', t('Day'), { type: 'number', min: 1 }), field('cam', t('Camera'), { placeholder: 'A', maxlength: 4 }), field('card', t('Card'), { type: 'number', min: 1 })),
+    prev)
+}
 function viewHome() {
   const o = S.opts
   const set = (k, v) => { o[k] = v; saveOpts(); draw() }
@@ -178,6 +191,7 @@ function viewHome() {
     return box
   }
   const opt = (title, sub, control) => h('div', { class: 'opt' }, h('span', {}, h('b', {}, title), h('small', {}, sub)), control)
+  const bsub = () => h('div', { class: 'modes' }, seg([['source', t('Against the originals')], ['report', t('Against its copy report')]], S.bmode, (v) => { S.bmode = v; saveOpts(); draw() }))
   const mode = h('div', { class: 'modes' }, seg([['twins', t('Find twins')], ['backup', t('Check a backup')], ['copy', t('Make a twin')]], S.mode, (v) => { S.mode = v; saveOpts(); draw() }))
   const quiet = [
     opt(t('Language'), t('The words of the app.'), seg([['en', 'English'], ['el', 'Ελληνικά']], S.lang, (v) => { S.lang = v; document.documentElement.lang = v; saveOpts(); draw() })),
@@ -203,9 +217,29 @@ function viewHome() {
         dropOn(h('div', { class: 'drop side' + (S.targets.length ? ' set' : '') }, h('div', { class: 'dz-i', html: I.shield }), h('b', {}, t('Copy to')), h('small', {}, t('One drive, or two at once.')),
           S.targets.length ? h('div', { class: 'roots' }, ...S.targets.map((p) => chip(p, () => { S.targets = S.targets.filter((x) => x !== p); saveOpts(); draw() }))) : null,
           h('button', { class: 'btn', onclick: async () => more(await T.pick()) }, ico('plus'), S.targets.length ? t('Add a drive…') : t('Choose…'))), more)),
-      h('div', { class: 'opts' }, quiet[0], quiet[1]),
+      h('div', { class: 'opts' },
+        opt(t('Copy a card as soon as it is in'), t('When a camera card is put in, RoarTwin offers to copy it to these drives. Several cards wait their turn.'),
+          switchEl(o.autoCard, (v) => set('autoCard', v), t('Copy a card as soon as it is in'))),
+        opt(t('Name the folders'), t('Date_Project / Day / Camera_Card on every drive; the card number goes up by itself, the day too on a new date.'),
+          switchEl(o.naming, (v) => set('naming', v), t('Name the folders'))),
+        o.naming ? namingEl() : null,
+        quiet[0], quiet[1]),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !S.card || !S.targets.length, onclick: startCopy }, ico('shield'), t('Copy and check'))),
       h('p', { class: 'note' }, t('Nothing is written over or deleted. The card keeps its folder name, the clips keep their dates, and each copy gets a report.')))))
+  }
+  if (S.mode === 'backup' && S.bmode === 'report') {
+    // a drive against the report its twin left (Alex, 25 Oct)
+    const pick = async (paths) => { const p = paths?.[0]; if (!p) return; if (!(await T.isFolder(p))) return toast(t('Choose a folder or a drive.')); S.copyDir = p; saveOpts(); draw() }
+    return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card' },
+      h('div', { class: 'hero' }, h('h1', { html: t('Has the <b>drive</b> kept it all?') }),
+        h('p', {}, t('Drives go bad on the shelf without a sound. RoarTwin reads the copy again and compares every file with the report written the day it was copied.'))),
+      mode, bsub(),
+      dropOn(h('div', { class: 'drop' + (S.copyDir ? ' set' : '') }, h('div', { class: 'dz-i', html: I.shield }), h('b', {}, t('The copy')), h('small', {}, t('A folder a twin was made in: its report says what every file held on the day.')),
+        S.copyDir ? h('span', { class: 'root', title: S.copyDir }, ico('folder'), h('span', {}, S.copyDir), h('button', { 'aria-label': t('Remove'), html: I.x, onclick: () => { S.copyDir = ''; saveOpts(); draw() } })) : null,
+        h('button', { class: 'btn', onclick: async () => pick(await T.pick()) }, ico('plus'), S.copyDir ? t('Choose another…') : t('Choose…'))), pick),
+      h('div', { class: 'opts' }, quiet[0]),
+      h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !S.copyDir, onclick: startRecheck }, ico('shield'), t('Check against the report'))),
+      h('p', { class: 'note' }, t('Nothing is changed: RoarTwin only reads both sides.')))))
   }
   if (S.mode === 'backup') {
     // the originals (a card, a shoot) on one side, the backup on the other (Alex, 25 Oct)
@@ -221,7 +255,7 @@ function viewHome() {
     return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card' },
       h('div', { class: 'hero' }, h('h1', { html: t('Is it all on the <b>backup</b>?') }),
         h('p', {}, t('RoarTwin looks for every file of the originals on the backup by what it holds, byte for byte, wherever it sits and whatever it is called, and lists what is missing or different.'))),
-      mode,
+      mode, bsub(),
       h('div', { class: 'sides' },
         side('source', t('The originals'), t('A card, a shoot, a drive.')),
         side('backup', t('The backup'), t('Where they should all be.'))),
@@ -297,17 +331,45 @@ async function start() {
     S.view = 'home'; draw(); toast(String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
   } finally { off?.() }
 }
+const today = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
+const pad2 = (n) => String(Math.max(0, Number(n) || 0)).padStart(2, '0')
+// the folder a card goes into on every drive, from the naming rule; empty means the card's own name
+const folderName = (date = today()) => {
+  if (!S.opts.naming) return ''
+  const n = S.naming
+  return [[date, n.project.trim()].filter(Boolean).join('_'), `Day${pad2(n.day)}`, [n.cam.trim() && `Cam${n.cam.trim()}`, `Card${pad2(n.card)}`].filter(Boolean).join('_')].join('/')
+}
 async function startCopy() {
   if (!S.card || !S.targets.length) return
+  // a new date is a new shooting day, and its cards start from 1 again
+  if (S.opts.naming && S.naming.lastDate && S.naming.lastDate !== today()) { S.naming.day = (Number(S.naming.day) || 0) + 1; S.naming.card = 1 }
+  const folder = folderName()
   S.running = 'copy'
   S.view = 'scan'; S.progress = { stage: 'list', files: 0 }; S.stages = new Set(['list']); draw()
   const off = T.onProgress((p) => { S.progress = p; S.stages.add(p.stage); drawProgress() })
   try {
-    const r = await T.copy({ source: S.card, targets: S.targets, skipHidden: S.opts.skipHidden })
-    if (r?.stopped) { S.view = 'home'; toast(t('Copy stopped. What was half copied was taken away.')); return draw() }
-    S.cres = r; S.view = 'copied'; draw()
+    const r = await T.copy({ source: S.card, targets: S.targets, folder, skipHidden: S.opts.skipHidden })
+    if (r?.stopped) { S.queue = []; S.view = 'home'; toast(t('Copy stopped. What was half copied was taken away.')); return draw() }
+    if (S.opts.naming) { S.naming.lastDate = today(); if (!r.failed.length) S.naming.card = (Number(S.naming.card) || 0) + 1 }
+    S.cres = r; S.copies = [r, ...S.copies]; saveOpts()
+    // the next card waiting goes straight on
+    if (S.queue.length) { S.card = S.queue.shift(); saveOpts(); off?.(); return startCopy() }
+    S.view = 'copied'; draw()
   } catch (e) {
     S.view = 'home'; draw(); toast(String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, ''))
+  } finally { off?.() }
+}
+async function startRecheck() {
+  if (!S.copyDir) return
+  S.running = 'backup'
+  S.view = 'scan'; S.progress = { stage: 'hash', bytesDone: 0, bytesTotal: 0 }; S.stages = new Set(['hash']); draw()
+  const off = T.onProgress((p) => { S.progress = p; S.stages.add(p.stage); drawProgress() })
+  try {
+    const r = await T.recheck({ folder: S.copyDir })
+    if (r?.stopped) { S.view = 'home'; toast(t('Check stopped.')); return draw() }
+    S.bres = r; S.shown = 60; S.view = 'backup'; draw()
+  } catch (e) {
+    S.view = 'home'; draw(); toast(t(String(e?.message || e).replace(/^Error invoking remote method '[^']+': (Error: )?/, '')))
   } finally { off?.() }
 }
 async function startBackup() {
@@ -353,7 +415,7 @@ function drawProgress() {
   scanEls.ring.classList.toggle('spin', frac == null)
   scanEls.ring.querySelector('.p').setAttribute('stroke-dashoffset', String(276.5 * (1 - (frac ?? 0))))
   scanEls.ring.querySelector('b').textContent = frac == null ? '' : Math.floor(frac * 100) + '%'
-  scanEls.t.textContent = text[0]; scanEls.s.textContent = text[1]
+  scanEls.t.textContent = text[0]; scanEls.s.textContent = text[1] + (S.running === 'copy' && S.queue.length ? ' · ' + t('Waiting: {n}', { n: S.queue.map((q) => q.split(/[\\/]/).filter(Boolean).pop()).join(', ') }) : '')
   const at = STAGES.findIndex(([k]) => k === p.stage)
   const plan = plannedStages()
   scanEls.steps.replaceChildren(...STAGES.filter(([k]) => plan.includes(k) || S.stages.has(k)).map(([k, label]) => {
@@ -450,6 +512,7 @@ function viewBackup() {
   const b = S.bres
   const differs = b.missing.filter((m) => m.why === 'differs').length
   const allThere = !b.missing.length
+  if (b.mode === 'recheck') return viewRecheck(b)
   const head = h('section', { class: 'group verdict' + (allThere ? ' ok' : ' bad') },
     h('div', { class: 'big-i', html: allThere ? I.shield : I.warn }),
     h('div', {},
@@ -476,11 +539,14 @@ function viewBackup() {
     b.missing.length > shown.length ? h('button', { class: 'btn more', onclick: () => { S.shown += 60; draw() } }, t('Show {n} more', { n: Math.min(60, b.missing.length - shown.length) })) : null))
 }
 function viewCopied() {
-  const c = S.cres
+  return h('main', {}, h('div', { class: 'res' }, ...(S.copies.length ? S.copies : [S.cres]).flatMap(copiedEl)))
+}
+function copiedEl(c) {
   const ok = !c.failed.length
   const head = h('section', { class: 'group verdict' + (ok ? ' ok' : ' bad') },
     h('div', { class: 'big-i', html: ok ? I.shield : I.warn }),
     h('div', {},
+      h('div', { class: 'card-name' }, c.source),
       h('h2', { html: ok ? t('Copied and <b>checked</b>.') : (new Set(c.failed.map((f) => f.path)).size === 1 ? t('1 file did <b>not</b> copy right.') : t('{n} did <b>not</b> copy right.', { n: plural(new Set(c.failed.map((f) => f.path)).size, 'file') })) }),
       h('div', { class: 'sum' },
         h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), t('{a} of {b} checked on every drive · {c}', { a: num(c.verified), b: plural(c.total, 'file'), c: bytes(c.bytes) })),
@@ -488,17 +554,44 @@ function viewCopied() {
         h('span', { class: 'chip' }, t('in {t}', { t: dur(c.took / 1000) }))),
       h('div', { class: 'paths' }, ...c.targets.map((d, i) => h('div', { class: 'dest' }, h('span', { title: d }, '→ ' + d),
         c.reports[i] ? h('button', { class: 'btn', style: { height: '28px', padding: '0 10px', fontSize: '12px' }, onclick: () => T.reveal(c.reports[i]) }, ico('reveal'), t('Show report')) : null)))))
-  return h('main', {}, h('div', { class: 'res' }, head,
+  return [head,
     c.failed.length ? h('section', { class: 'group' }, h('div', { class: 'files', style: { paddingTop: '8px' } }, ...c.failed.map((f) => h('div', { class: 'file nocheck' },
       h('div', { class: 'thumb' }, ico('warn')),
       h('div', { class: 'f-main' }, h('div', { class: 'f-name', title: f.name }, f.name), h('div', { class: 'f-dir', title: f.target }, '‎' + f.target),
         h('div', { class: 'f-meta' }, h('span', { class: 'chip tint' }, h('i'), t(f.error)))),
-      h('div', { class: 'f-act' }, h('button', { class: 'ib sm', title: T.platform === 'win32' ? t('Show in Explorer') : t('Show in Finder'), html: I.reveal, onclick: () => T.reveal(f.path) })))))) : null))
+      h('div', { class: 'f-act' }, h('button', { class: 'ib sm', title: T.platform === 'win32' ? t('Show in Explorer') : t('Show in Finder'), html: I.reveal, onclick: () => T.reveal(f.path) })))))) : null]
+}
+// the drive against its report: what has changed or gone since the day it was copied
+function viewRecheck(b) {
+  const changed = b.missing.filter((m) => m.why === 'changed').length, gone = b.missing.length - changed
+  const ok = !b.missing.length
+  const w = b.when ? b.when.slice(0, 10) : ''
+  const head = h('section', { class: 'group verdict' + (ok ? ' ok' : ' bad') },
+    h('div', { class: 'big-i', html: ok ? I.shield : I.warn }),
+    h('div', {},
+      h('h2', { html: ok ? (w ? t('Nothing has changed since {w}.', { w }) : t('Nothing has changed since it was copied.')) : t('{n} have changed or gone since {w}.', { n: plural(b.missing.length, 'file'), w }) }),
+      h('div', { class: 'sum' },
+        h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), t('{a} of {b} safe · {c}', { a: num(b.safe), b: plural(b.total, 'file'), c: bytes(b.safeBytes) })),
+        changed ? h('span', { class: 'chip tint' }, h('i'), t('{n} changed', { n: num(changed) })) : null,
+        gone ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' } }, h('i'), t('{n} gone', { n: num(gone) })) : null,
+        h('span', { class: 'chip' }, t('checked byte for byte in {t}', { t: dur(b.took / 1000) }))),
+      h('div', { class: 'paths' }, h('div', { class: 'dest' }, h('span', { title: b.backup }, b.backup),
+        h('button', { class: 'btn', style: { height: '28px', padding: '0 10px', fontSize: '12px' }, onclick: () => T.reveal(b.source) }, ico('reveal'), t('Report'))))))
+  const shown = b.missing.slice(0, S.shown)
+  return h('main', {}, h('div', { class: 'res' }, head,
+    shown.length ? h('section', { class: 'group' }, h('div', { class: 'files', style: { paddingTop: '8px' } }, ...shown.map((f) => h('div', { class: 'file nocheck' },
+      h('div', { class: 'thumb' }, ico(f.why === 'gone' ? 'x' : 'warn')),
+      h('div', { class: 'f-main' }, h('div', { class: 'f-name', title: f.name }, f.name), h('div', { class: 'f-dir', title: f.dir }, '‎' + f.dir),
+        h('div', { class: 'f-meta' },
+          h('span', { class: 'chip tint', style: { '--c': f.why === 'gone' ? 'var(--warn)' : 'var(--acc)' } }, h('i'), f.why === 'gone' ? t('No longer there') : t('Changed since it was copied')),
+          h('span', { class: 'chip' }, bytes(f.size)))),
+      h('div', { class: 'f-act' }, f.why !== 'gone' ? h('button', { class: 'ib sm', title: T.platform === 'win32' ? t('Show in Explorer') : t('Show in Finder'), html: I.reveal, onclick: () => T.reveal(f.path) }) : null))))) : null,
+    b.missing.length > shown.length ? h('button', { class: 'btn more', onclick: () => { S.shown += 60; draw() } }, t('Show {n} more', { n: Math.min(60, b.missing.length - shown.length) })) : null))
 }
 async function exportBackup() {
   const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`
   const rows = [[t('Name'), t('Folder'), t('Size (bytes)'), t('Problem'), t('At the same place on the backup'), t('Modified')].map(q).join(',')]
-  S.bres.missing.forEach((f) => rows.push([f.name, f.dir, f.size, f.why === 'differs' ? t('Different on the backup') : t('Not on the backup'), f.other, new Date(f.mtime).toISOString().slice(0, 10)].map(q).join(',')))
+  S.bres.missing.forEach((f) => rows.push([f.name, f.dir, f.size, ({ differs: t('Different on the backup'), changed: t('Changed since it was copied'), gone: t('No longer there') })[f.why] || t('Not on the backup'), f.other, new Date(f.mtime).toISOString().slice(0, 10)].map(q).join(',')))
   if (await T.exportCSV(rows.join('\r\n'))) toast(t('List saved'))
 }
 
@@ -532,6 +625,16 @@ async function exportList() {
   if (await T.exportCSV(rows.join('\r\n'))) toast(t('List saved'))
 }
 
+// a card put in (Alex, 25 Oct; Copy a card as soon as it is in can be switched off)
+T.onCard?.(async ({ path: p, name }) => {
+  if (!S.opts.autoCard) return
+  if (S.running === 'copy' && S.view === 'scan') { if (p !== S.card && !S.queue.includes(p)) { S.queue.push(p); toast(t('{n} waits its turn.', { n: name })); drawProgress() } return }
+  if (S.view === 'scan') return
+  if (!S.targets.length) { S.mode = 'copy'; S.card = p; S.view = 'home'; saveOpts(); draw(); return toast(t('A card is in: {n}. Choose where it is copied.', { n: name })) }
+  const go = await sheet(t('A card is in: {n}', { n: name }), t('Copy it to {d} and check every copy?', { d: S.targets.map((x) => x.split(/[\\/]/).filter(Boolean).pop()).join(', ') }) + (S.opts.naming ? ` → ${folderName()}` : ''), [[t('Not now'), false], [t('Copy and check'), true, true]])
+  if (!go) return
+  S.mode = 'copy'; S.card = p; saveOpts(); startCopy()
+})
 T.onMenu?.((cmd) => {
   if (cmd === 'add' && S.view === 'home') T.pick().then(addRoots)
   if (cmd === 'new' && S.view !== 'scan') { S.view = 'home'; draw() }

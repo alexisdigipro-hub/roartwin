@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('twin', {
   stop: () => ipcRenderer.invoke('twin:stop'),
   backup: (opts) => ipcRenderer.invoke('twin:backup', opts),
   copy: (opts) => ipcRenderer.invoke('twin:copy', opts),
+  recheck: (opts) => ipcRenderer.invoke('twin:recheck', opts),
+  onCard: on('twin:card'),
   onProgress: on('twin:progress'),
   trash: (paths) => ipcRenderer.invoke('twin:trash', [...paths].map(String)),
   reveal: (p) => ipcRenderer.invoke('twin:reveal', String(p)),

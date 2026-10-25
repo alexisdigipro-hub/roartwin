@@ -5,7 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { scan, backupCheck, makeTwin, parseProbe, parseAudio, Stopped } = require('../electron/engine')
+const { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, parseProbe, parseAudio, Stopped } = require('../electron/engine')
 
 const bin = process.env.FFMPEG || require('ffmpeg-static')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin-'))
@@ -177,5 +177,22 @@ async function more() {
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [e.name])
     assert.ok(!walk(at2('driveA')).some((n) => n.endsWith('.roartwin-part')), 'no half copies')
     await assert.rejects(makeTwin({ source: at2('card'), targets: [at2('card/sub')] }), /inside/)
+
+    // the naming rule: the card goes into Date_Project/Day01/CamA_Card03, unsafe characters made safe
+    const tn = await makeTwin({ source: at2('card'), targets: [at2('driveC')], folder: '2026-10-25_Fakinos: Mataria/Day01/CamA_Card03' })
+    assert.strictEqual(tn.targets[0], at2('driveC', '2026-10-25_Fakinos- Mataria', 'Day01', 'CamA_Card03'))
+    assert.ok(fs.existsSync(at2('driveC', '2026-10-25_Fakinos- Mataria', 'Day01', 'CamA_Card03', 'sub', 'C.wav')))
+    // months later: the drive against its report; one file changed on the shelf, one gone
+    fs.writeFileSync(at2('driveA/card/B.mov'), 'take b\n'.repeat(3999) + 'tAke b\n')
+    fs.rmSync(at2('driveA/card/D.mov'))
+    const rc = await recheck({ folder: at2('driveA/card') })
+    assert.strictEqual(rc.total, 5); assert.strictEqual(rc.safe, 3)
+    assert.deepStrictEqual(rc.missing.map((m) => [m.name, m.why]).sort(), [['B.mov', 'changed'], ['D.mov', 'gone']])
+    await assert.rejects(recheck({ folder: at2('card') }), /no RoarTwin copy report/)
+    assert.deepStrictEqual(readCsv('"a","b ""c"" d"\r\n1,2\r\n'), [['a', 'b "c" d'], ['1', '2']])
+    // cards
+    fs.mkdirSync(at2('vol/SONY/PRIVATE/M4ROOT'), { recursive: true }); fs.mkdirSync(at2('vol/DOCS/letters'), { recursive: true })
+    fs.writeFileSync(at2('vol/BMPCC/A001_C001.braw'), 'x'); fs.writeFileSync(at2('vol/DOCS/letters/a.txt'), 'x')
+    assert.ok(await looksLikeCard(at2('vol/SONY'))); assert.ok(await looksLikeCard(at2('vol/BMPCC'))); assert.ok(!(await looksLikeCard(at2('vol/DOCS'))))
   } finally { fs.rmSync(r2, { recursive: true, force: true }) }
 }
