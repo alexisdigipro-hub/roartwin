@@ -84,6 +84,19 @@ export function demoTwin() {
         failed: [{ path: '/Volumes/CARD_A/CLIP/A003_C021.mov', name: 'A003_C021.mov', target: '/Volumes/SHUTTLE_2/CARD_A', error: 'The copy is not the same as the card (corrupted on the way). Copy it again.' }],
       }
     },
+    // a card put in: the page can be shown it from a test (window.__card)
+    onCard: (fn) => { window.__card = fn; return () => {} },
+    recheck: async () => {
+      const tick = (p) => listeners.forEach((fn) => fn(p))
+      for (let i = 0; i <= 10; i++) { tick({ stage: 'hash', bytesDone: i * 25e9, bytesTotal: 250e9 }); await wait(50) }
+      return {
+        mode: 'recheck', source: '/Volumes/SHUTTLE_1/CARD_A/_RoarTwin copy report 2026-03-14 18-02.csv', backup: '/Volumes/SHUTTLE_1/CARD_A', when: '2026-03-14 18-02', total: 412, totalBytes: 250e9, safe: 410, safeBytes: 248e9, took: 1730e3, cloud: [],
+        missing: [
+          { path: '/Volumes/SHUTTLE_1/CARD_A/CLIP/A003_C009.mov', name: 'A003_C009.mov', dir: '/Volumes/SHUTTLE_1/CARD_A/CLIP', size: 1.4e9, mtime: day(1), why: 'changed', other: '' },
+          { path: '/Volumes/SHUTTLE_1/CARD_A/CLIP/A003_C010.mov', name: 'A003_C010.mov', dir: '/Volumes/SHUTTLE_1/CARD_A/CLIP', size: 0.9e9, mtime: 0, why: 'gone', other: '' },
+        ],
+      }
+    },
     backup: async () => {
       stop = false
       const tick = (p) => listeners.forEach((fn) => fn(p))

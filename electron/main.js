@@ -124,13 +124,43 @@ ipcMain.handle('twin:copy', async (e, opts) => {
   let lastTick = 0
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
-    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, skipHidden: opts.skipHidden !== false }, tick, () => stopNow)
+    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false }, tick, () => stopNow)
     return lastCopy
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
     throw err
   } finally { scanning = false; powerSaveBlocker.stop(awake) }
 })
+// a drive checked again against the report its twin left, months later (Alex, 25 Oct). Reads only.
+ipcMain.handle('twin:recheck', async (e, opts) => {
+  if (scanning) throw new Error('A scan is already running.')
+  const dirOk = (p) => { try { return fs.statSync(String(p)).isDirectory() } catch { return false } }
+  if (!dirOk(opts?.folder)) throw new Error('Choose the folder a twin was made in.')
+  scanning = true; stopNow = false
+  const awake = powerSaveBlocker.start('prevent-app-suspension')
+  let lastTick = 0
+  const tick = (t) => { const now = Date.now(); if (now - lastTick > 120) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
+  try {
+    lastBackup = await engine.recheck({ folder: String(opts.folder) }, tick, () => stopNow)
+    return lastBackup
+  } catch (err) {
+    if (err instanceof engine.Stopped) return { stopped: true }
+    throw err
+  } finally { scanning = false; powerSaveBlocker.stop(awake) }
+})
+/* a card put in (Alex, 25 Oct): the drives are looked at every few seconds, and a new one holding camera clips is
+   told to the page, which offers to copy it (or not, if that is switched off there) */
+let volumes = null
+async function currentVolumes() {
+  if (process.platform === 'darwin') return (await fs.promises.readdir('/Volumes').catch(() => [])).map((n) => path.join('/Volumes', n))
+  if (process.platform === 'win32') return 'DEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => l + ':\\').filter((p) => { try { return fs.existsSync(p) } catch { return false } })
+  return []
+}
+async function watchVolumes() {
+  const now = await currentVolumes()
+  if (volumes) for (const v of now) if (!volumes.includes(v) && await engine.looksLikeCard(v)) { try { win?.webContents.send('twin:card', { path: v, name: path.basename(v) || v }) } catch { /* no window */ } }
+  volumes = now
+}
 // is every file of the originals on the backup? (Alex, 25 Oct) Reads only; changes nothing.
 let lastBackup = null
 ipcMain.handle('twin:backup', async (e, opts) => {
@@ -219,6 +249,7 @@ app.whenReady().then(() => {
   menu()
   open()
   updater.start(ipcMain, () => { quitting = true })
+  watchVolumes(); setInterval(watchVolumes, 3000)
   app.on('activate', () => { if (!win) open() })
 })
 app.on('before-quit', () => { quitting = true; stopNow = true })

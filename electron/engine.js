@@ -649,7 +649,10 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
   const targets = [...new Set((opts.targets || []).map((t) => path.resolve(t)))]
   if (!targets.length) throw new Error('Choose where the copy goes.')
   for (const t of targets) if (inside(t, source) || inside(source, t)) throw new Error('The card and where it is copied cannot be one inside the other.')
-  const name = path.basename(source) || 'Copy'
+  // where the copy goes on each drive: the card's own name, or a folder path from the naming rule (Date_Project/Day01/
+  // CamA_Card03), each part made safe for Mac and Windows
+  const named = String(opts.folder || '').split(/[\\/]+/).map((x) => x.replace(/[:*?"<>|\x00-\x1f]/g, '-').replace(/^\.+/, '').trim()).filter(Boolean)
+  const name = named.length ? path.join(...named) : path.basename(source) || 'Copy'
   const files = await list([source], { skipHidden: opts.skipHidden !== false, skipCloud: false, keepEmpty: true }, tick, stop, [])
   const bytesTotal = files.reduce((a, f) => a + f.size, 0)
   // room on every drive first
@@ -740,4 +743,67 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
   }
 }
 
-module.exports = { scan, backupCheck, makeTwin, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }
+/* ---------- a drive checked again against its copy report, months later ---------- */
+/* Drives go bad on the shelf without a sound (bit rot). The report a twin left in its folder holds every file's SHA-256
+   from the day it was copied; reading the folder again and comparing tells what is still the same, what has changed
+   and what is gone. The newest report in the folder is used. */
+function readCsv(text) {
+  const rows = []
+  let row = [], cell = '', q = false
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i]
+    if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++ } else q = false } else cell += c; continue }
+    if (c === '"') q = true
+    else if (c === ',') { row.push(cell); cell = '' }
+    else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = '' }
+    else cell += c
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row) }
+  return rows
+}
+async function recheck(opts, tick = () => {}, stop = () => false) {
+  const t0 = Date.now()
+  const folder = path.resolve(opts.folder)
+  const reports = (await fsp.readdir(folder)).filter((n) => /^_RoarTwin copy report .*\.csv$/i.test(n)).sort()
+  if (!reports.length) throw new Error('There is no RoarTwin copy report in this folder. Choose the folder a twin was made in.')
+  const report = path.join(folder, reports[reports.length - 1])
+  const rows = readCsv((await fsp.readFile(report, 'utf8')).replace(/^﻿/, '')).slice(1).filter((r) => r.length >= 4 && r[2])
+  const want = rows.filter((r) => r[3] === 'verified' || r[3] === 'already there').map((r) => ({ rel: r[0], size: +r[1], hash: r[2] }))
+  const bytesTotal = want.reduce((a, f) => a + f.size, 0)
+  let bytesDone = 0, last = 0
+  tick({ stage: 'hash', bytesDone, bytesTotal })
+  const missing = []
+  let safe = 0, safeBytes = 0
+  for (const f of want) {
+    if (stop()) throw new Stopped()
+    const p = path.join(folder, f.rel)
+    const st = await fsp.stat(p).catch(() => null)
+    const base = { path: p, name: path.basename(p), dir: path.dirname(p), size: f.size, mtime: st ? st.mtimeMs : 0, other: '' }
+    if (!st) { missing.push({ ...base, why: 'gone' }); bytesDone += f.size; continue }
+    let got = ''
+    try { got = await fullHash({ path: p }, (n) => { bytesDone += n; if (Date.now() - last > 250) { last = Date.now(); tick({ stage: 'hash', bytesDone, bytesTotal }) } }, stop) } catch (e) { if (e instanceof Stopped) throw e }
+    if (got === f.hash) { safe++; safeBytes += f.size } else missing.push({ ...base, why: 'changed' })
+  }
+  missing.sort((a, b) => b.size - a.size)
+  const when = (reports[reports.length - 1].match(/report (.+)\.csv$/i) || [])[1] || ''
+  return { mode: 'recheck', source: report, backup: folder, when, total: want.length, totalBytes: bytesTotal, safe, safeBytes, missing, cloud: [], took: Date.now() - t0 }
+}
+
+/* ---------- is this drive a camera card? ---------- */
+/* What cameras put at the top of a card: DCIM (most), PRIVATE / M4ROOT / XDROOT (Sony), CLIP / CONTENTS (Canon, Panasonic
+   P2), AVCHD, BPAV, a RED .RDM, Blackmagic and ARRI clips straight in it. A drive that only holds documents is not one. */
+const CARD_DIRS = /^(dcim|private|m4root|xdroot|clip|contents|avchd|bpav|xavc|arriraw|.+\.rdm)$/i
+async function looksLikeCard(root) {
+  try {
+    const top = await fsp.readdir(root, { withFileTypes: true })
+    if (top.some((e) => e.isDirectory() && CARD_DIRS.test(e.name))) return true
+    if (top.some((e) => e.isFile() && isVideo(e.name))) return true
+    for (const e of top.filter((x) => x.isDirectory() && !x.name.startsWith('.')).slice(0, 12)) {
+      const inner = await fsp.readdir(path.join(root, e.name)).catch(() => [])
+      if (inner.some((n) => isVideo(n))) return true
+    }
+  } catch { /* gone */ }
+  return false
+}
+
+module.exports = { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }

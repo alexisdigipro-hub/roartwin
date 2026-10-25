@@ -37,6 +37,15 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   drive and its SHA-256 checked against the card's. Nothing is written over (a file already there with the same bytes
   counts as copied; one with other bytes is reported and left alone), nothing is deleted, there must be room first,
   and each copy gets `_RoarTwin copy report <date>.csv` (every file, size, SHA-256, result).
+- **A card put in** (Make a twin, a switch, on by default): RoarTwin looks at the drives every few seconds; a new one
+  that holds camera clips (DCIM, PRIVATE/M4ROOT, XDROOT, CLIP, CONTENTS, AVCHD, a RED .RDM, clips at its top) brings a
+  question: copy it to the chosen drives and check every copy? Cards put in during a copy wait their turn and go on by
+  themselves.
+- **Naming the folders** (a switch): Date_Project/DayNN/CamX_CardNN on every drive. The card number goes up after
+  each copy that checked out, and on a new date the day goes up and the cards start from 1.
+- **A drive against its copy report** (Check a backup → Against its copy report): months later, the folder a twin was
+  made in is read again and every file compared with the SHA-256 its newest report holds: still the same, changed
+  (bit rot) or gone.
 - **Language:** English by default; Ελληνικά under Language (every text of the page, kept per computer).
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
