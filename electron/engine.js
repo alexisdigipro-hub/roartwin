@@ -18,6 +18,7 @@ const fsp = fs.promises
 const path = require('path')
 const crypto = require('crypto')
 const { spawn, execFileSync } = require('child_process')
+const os = require('os')
 
 const VIDEO = new Set(['mp4', 'mov', 'm4v', 'mkv', 'avi', 'mxf', 'mts', 'm2ts', 'ts', 'wmv', 'webm', 'flv', 'mpg', 'mpeg', 'm2v', '3gp', 'dv', 'vob', 'ogv', 'r3d', 'braw', 'crm', 'insv', 'lrv'])
 const IMAGE = new Set(['jpg', 'jpeg', 'png', 'webp', 'gif', 'bmp', 'tif', 'tiff'])
@@ -159,10 +160,15 @@ async function exact(files, tick, stop) {
   return groups
 }
 
+/* Lighter on the computer (Alex, 26 Oct: "make it lighter"): each ffmpeg decodes on one core (on two for a whole video
+   read through) and runs at a low priority, and as many run side by side as half the cores, two at least and four at
+   most; the Mac stays free for everything else while a scan runs. */
+const JOBS = Math.max(2, Math.min(4, Math.floor((os.cpus()?.length || 4) / 2)))
 /* ffmpeg, its output as bytes, its log as text */
-function ff(bin, args, stop, max = 8 * 1024 * 1024, ms = 60e3) {
+function ff(bin, args, stop, max = 8 * 1024 * 1024, ms = 60e3, threads = 1) {
   return new Promise((ok) => {
-    const p = spawn(bin, ['-hide_banner', '-nostdin', ...args], { windowsHide: true })
+    const p = spawn(bin, ['-hide_banner', '-nostdin', '-threads', String(threads), ...args], { windowsHide: true })
+    try { os.setPriority(p.pid, 10) } catch { /* not allowed: it runs as it is */ }
     const out = [], err = []
     let size = 0
     const timer = setTimeout(() => p.kill('SIGKILL'), ms)
@@ -227,14 +233,14 @@ const closeLength = (a, b) => Math.abs(a - b) <= Math.max(1, 0.01 * Math.max(a, 
 async function similar(bin, videos, tick, stop) {
   let done = 0
   tick({ stage: 'video', done, total: videos.length })
-  await pool(videos, 3, async (f) => { if (!f.video) f.video = await probe(bin, f.path, stop); if (++done % 5 === 0 || done === videos.length) tick({ stage: 'video', done, total: videos.length }) }, stop)
+  await pool(videos, JOBS, async (f) => { if (!f.video) f.video = await probe(bin, f.path, stop); if (++done % 5 === 0 || done === videos.length) tick({ stage: 'video', done, total: videos.length }) }, stop)
   const ok = videos.filter((f) => f.video && f.video.dur > 0.5).sort((a, b) => a.video.dur - b.video.dur)
   const pairs = []
   for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length && closeLength(ok[i].video.dur, ok[j].video.dur); j++) pairs.push([ok[i], ok[j]])
   const need = [...new Set(pairs.flat())]
   done = 0
   tick({ stage: 'frames', done, total: need.length })
-  await pool(need, 3, async (f) => { if (!f.prints) f.prints = await fingerprint(bin, f, stop); done++; tick({ stage: 'frames', done, total: need.length }) }, stop)
+  await pool(need, JOBS, async (f) => { if (!f.prints) f.prints = await fingerprint(bin, f, stop); done++; tick({ stage: 'frames', done, total: need.length }) }, stop)
   // twins of twins are one group
   const parent = new Map()
   const find = (x) => { while (parent.get(x) !== x) x = parent.get(x); return x }
@@ -315,7 +321,7 @@ function dupFolders(files, exactGroups, roots) {
    every video through takes time, so it is a choice of its own. */
 async function framesPerSecond(bin, f, stop) {
   const n = Math.ceil(f.video.dur) + 2
-  const { out } = await ff(bin, ['-i', f.path, '-an', '-sn', '-vf', 'fps=1,scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, n * 72 + 1024, Math.max(60e3, f.video.dur * 1500))
+  const { out } = await ff(bin, ['-i', f.path, '-an', '-sn', '-vf', 'fps=1,scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, n * 72 + 1024, Math.max(60e3, f.video.dur * 1500), 2)
   const prints = []
   for (let i = 0; i + 72 <= out.length; i += 72) prints.push(split64(dhash(out.subarray(i, i + 72))))
   return prints
@@ -342,14 +348,14 @@ function partAt(sp, lp) {
 async function parts(bin, videos, tick, stop) {
   let done = 0
   tick({ stage: 'video', done, total: videos.length })
-  await pool(videos, 3, async (f) => { if (!f.video) f.video = await probe(bin, f.path, stop); done++; tick({ stage: 'video', done, total: videos.length }) }, stop)
+  await pool(videos, JOBS, async (f) => { if (!f.video) f.video = await probe(bin, f.path, stop); done++; tick({ stage: 'video', done, total: videos.length }) }, stop)
   const ok = videos.filter((f) => f.video && f.video.dur >= 3 && f.video.dur <= 3 * 3600)
   const pairs = []
   for (const s of ok) for (const l of ok) if (s !== l && s.video.dur <= 900 && l.video.dur > s.video.dur * 1.1 + 1) pairs.push([s, l])
   const need = [...new Set(pairs.flat())]
   done = 0
   tick({ stage: 'parts', done, total: need.length })
-  await pool(need, 2, async (f) => { if (!f.secs) f.secs = await framesPerSecond(bin, f, stop); done++; tick({ stage: 'parts', done, total: need.length }) }, stop)
+  await pool(need, Math.max(1, JOBS >> 1), async (f) => { if (!f.secs) f.secs = await framesPerSecond(bin, f, stop); done++; tick({ stage: 'parts', done, total: need.length }) }, stop)
   const found = []
   const seen = new Set()
   // the longest video a short one is part of
@@ -367,8 +373,9 @@ async function parts(bin, videos, tick, stop) {
 async function photos(bin, images, tick, stop) {
   let done = 0
   tick({ stage: 'photos', done, total: images.length })
-  await pool(images, 4, async (f) => {
-    const { out, log } = await ff(bin, ['-i', f.path, '-frames:v', '1', '-vf', 'scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
+  await pool(images, JOBS, async (f) => {
+    // a JPEG is read at an eighth of its size: twice as fast, the same fingerprint
+    const { out, log } = await ff(bin, [...(/\.jpe?g$/i.test(f.name) ? ['-lowres', '3'] : []), '-i', f.path, '-frames:v', '1', '-vf', 'scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
     f.print = split64(dhash(out))
     const v = log.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
     f.dims = v ? { w: +v[1], h: +v[2] } : null
@@ -463,21 +470,27 @@ function soundDiff(a, b) {
 async function sounds(bin, list, tick, stop) {
   let done = 0
   tick({ stage: 'sound', done, total: list.length })
-  await pool(list, 3, async (f) => { const { log } = await ff(bin, ['-i', f.path], stop); f.audio = parseAudio(log); done++; tick({ stage: 'sound', done, total: list.length }) }, stop)
+  await pool(list, JOBS, async (f) => { const { log } = await ff(bin, ['-i', f.path], stop); f.audio = parseAudio(log); done++; tick({ stage: 'sound', done, total: list.length }) }, stop)
   const ok = list.filter((f) => f.audio && f.audio.dur >= 5).sort((a, b) => a.audio.dur - b.audio.dur)
   const pairs = []
   for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length && closeLength(ok[i].audio.dur, ok[j].audio.dur); j++) pairs.push([ok[i], ok[j]])
   const need = [...new Set(pairs.flat())]
   done = 0
   tick({ stage: 'listen', done, total: need.length })
-  await pool(need, 2, async (f) => { if (!f.sound) f.sound = await soundOf(bin, f, stop); done++; tick({ stage: 'listen', done, total: need.length }) }, stop)
+  await pool(need, JOBS, async (f) => { if (!f.sound) f.sound = await soundOf(bin, f, stop); done++; tick({ stage: 'listen', done, total: need.length }) }, stop)
   return unite(need, pairs.filter(([a, b]) => soundDiff(a.sound, b.sound) <= 0.2))
 }
 
-/* a small picture of a video or an image, as a data URL */
+/* a small picture of a video or an image, as a data URL: for a video the key frame nearest 40% in (three times faster
+   than the exact frame, and only a preview), a JPEG read at a size still above the preview's */
 async function thumb(bin, f, stop) {
-  const at = f.video ? ['-ss', (f.video.dur * 0.4).toFixed(2)] : []
-  const { out } = await ff(bin, [...at, '-i', f.path, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], stop, 400 * 1024)
+  const w = f.dims?.w || 0
+  const low = /\.jpe?g$/i.test(f.name) ? ['-lowres', w >= 2560 ? '3' : w >= 1280 ? '2' : '1'] : []
+  const pic = (at) => ff(bin, [...at, '-i', f.path, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], stop, 400 * 1024)
+  const ss = f.video ? ['-ss', (f.video.dur * 0.4).toFixed(2)] : low
+  // no key frame after that point (a short clip with one at its start): the exact frame after all
+  let { out } = await pic(f.video ? ['-skip_frame', 'nokey', ...ss] : ss)
+  if (out.length <= 100 && f.video) out = (await pic(ss)).out
   return out.length > 100 ? 'data:image/jpeg;base64,' + out.toString('base64') : ''
 }
 
@@ -569,7 +582,7 @@ async function scan(opts, tick = () => {}, stop = () => false) {
   let done = 0
   if (opts.ffmpeg) {
     tick({ stage: 'thumbs', done, total: all.length })
-    await pool(all, 3, async (f) => {
+    await pool(all, JOBS, async (f) => {
       if (isVideo(f.name) && !f.video) f.video = await probe(opts.ffmpeg, f.path, stop)
       if ((isVideo(f.name) && f.video) || isImage(f.name)) { if (!f.thumb) f.thumb = await thumb(opts.ffmpeg, f, stop) }
       done++; tick({ stage: 'thumbs', done, total: all.length })

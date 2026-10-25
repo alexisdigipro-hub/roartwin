@@ -46,6 +46,9 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
 - **A drive against its copy report** (Check a backup → Against its copy report): months later, the folder a twin was
   made in is read again and every file compared with the SHA-256 its newest report holds: still the same, changed
   (bit rot) or gone.
+- **Light on the computer:** each ffmpeg decodes on one core at a low priority, as many side by side as half the cores
+  (2 to 4); JPEGs are read at an eighth of their size for their fingerprint, video previews come from the nearest key
+  frame. The same results with about half the processor of before.
 - **Language:** English by default; Ελληνικά under Language (every text of the page, kept per computer).
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
