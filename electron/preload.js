@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('twin', {
   isFolder: (p) => ipcRenderer.invoke('twin:is-folder', String(p)),
   scan: (opts) => ipcRenderer.invoke('twin:scan', opts),
   stop: () => ipcRenderer.invoke('twin:stop'),
+  backup: (opts) => ipcRenderer.invoke('twin:backup', opts),
   onProgress: on('twin:progress'),
   trash: (paths) => ipcRenderer.invoke('twin:trash', [...paths].map(String)),
   reveal: (p) => ipcRenderer.invoke('twin:reveal', String(p)),

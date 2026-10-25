@@ -7,6 +7,9 @@
 //    the same length are compared by their pictures: nine frames, 10% to 90% through, each shrunk to a 9x8 grey
 //    fingerprint (a difference hash). Flat frames (black, white, one colour) say nothing and are left out, so two
 //    different black clips are not twins.
+// 3. More (Alex, 25 Oct, after a look at what other duplicate finders do): whole folders twice, a video that is a
+//    part of a longer one, similar photos, the same sound in another file, editing proxies kept apart, folders marked
+//    Masters (never offered for the Trash), and a backup check (is every file of the originals on the backup?).
 // Plain Node, no Electron: test/engine.test.js runs it as it is.
 const fs = require('fs')
 const fsp = fs.promises
@@ -50,6 +53,15 @@ const isVideo = (f) => VIDEO.has(extOf(f))
 const isImage = (f) => IMAGE.has(extOf(f))
 // which files a scan takes: 'all', 'video', 'image' or 'audio' (videosOnly from before means 'video')
 const KIND = { video: (f) => isVideo(f), image: (f) => PHOTO.has(extOf(f)), audio: (f) => AUDIO.has(extOf(f)) }
+const isAudio = (f) => AUDIO.has(extOf(f))
+/* an editing proxy: in a Proxy / Proxies / Proxy Media / CacheClip / Optimized Media folder, or named …_Proxy.mov.
+   It is the same picture as its original on purpose, so it is never offered as a twin of it. */
+const PROXY_DIR = /^(proxy|proxies|proxy media|cacheclip|optimized media|transcoded media)$/i
+const isProxy = (f) => /[_ .-]proxy$/i.test(path.parse(f.name).name) || f.dir.split(/[\\/]/).some((d) => PROXY_DIR.test(d))
+// the original's name a proxy stands for: A001_C003_Proxy.mp4 -> a001_c003
+const proxyBase = (name) => path.parse(name).name.replace(/[_ .-]proxy$/i, '').toLowerCase()
+// a path inside a folder (or the folder itself)
+const inside = (p, dir) => p === dir || p.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep)
 
 class Stopped extends Error { constructor() { super('Stopped') } }
 
@@ -146,12 +158,12 @@ async function exact(files, tick, stop) {
 }
 
 /* ffmpeg, its output as bytes, its log as text */
-function ff(bin, args, stop, max = 8 * 1024 * 1024) {
+function ff(bin, args, stop, max = 8 * 1024 * 1024, ms = 60e3) {
   return new Promise((ok) => {
     const p = spawn(bin, ['-hide_banner', '-nostdin', ...args], { windowsHide: true })
     const out = [], err = []
     let size = 0
-    const timer = setTimeout(() => p.kill('SIGKILL'), 60e3)
+    const timer = setTimeout(() => p.kill('SIGKILL'), ms)
     const watch = setInterval(() => { if (stop()) p.kill('SIGKILL') }, 300)
     p.stdout.on('data', (c) => { size += c.length; if (size <= max) out.push(c) })
     p.stderr.on('data', (c) => { if (err.length < 200) err.push(c) })
@@ -230,14 +242,234 @@ async function similar(bin, videos, tick, stop) {
   return [...groups.values()].filter((g) => g.length > 1)
 }
 
-/* the one to keep: for the same video, the biggest picture, then the most data; for exact copies, the oldest */
+/* the one to keep: one in a Masters folder first; then for the same video the biggest picture, then the most data; for
+   a part, the full video; for photos the most pixels; for sound the most data (WAV over MP3); for exact copies and
+   folders, the oldest */
 function suggest(g, kind) {
-  const score = (f) => kind === 'similar'
-    ? [(f.video?.w || 0) * (f.video?.h || 0), f.size, -f.mtime]
-    : [-f.mtime, -f.path.length, 0]
+  const score = (f) => [f.protected ? 1 : 0, ...(kind === 'similar' ? [(f.video?.w || 0) * (f.video?.h || 0), f.size, -f.mtime]
+    : kind === 'part' ? [f.video?.dur || 0, f.size, 0]
+    : kind === 'photo' ? [(f.dims?.w || 0) * (f.dims?.h || 0), f.size, -f.mtime]
+    : kind === 'sound' ? [f.size, -f.mtime, 0]
+    : [-f.mtime, -f.path.length, 0])]
   let best = g[0]
-  for (const f of g.slice(1)) { const a = score(f), b = score(best); for (let i = 0; i < 3; i++) { if (a[i] !== b[i]) { if (a[i] > b[i]) best = f; break } } }
+  for (const f of g.slice(1)) { const a = score(f), b = score(best); for (let i = 0; i < 4; i++) { if (a[i] !== b[i]) { if (a[i] > b[i]) best = f; break } } }
   return best
+}
+
+/* ---------- 64-bit fingerprints as two numbers, for comparing many quickly ---------- */
+const pop32 = (x) => { x -= (x >>> 1) & 0x55555555; x = (x & 0x33333333) + ((x >>> 2) & 0x33333333); return (((x + (x >>> 4)) & 0x0f0f0f0f) * 0x01010101) >>> 24 }
+const split64 = (b) => (b == null ? null : [Number(b >> 32n), Number(b & 0xffffffffn)])
+const ham64 = (a, b) => pop32(a[0] ^ b[0]) + pop32(a[1] ^ b[1])
+// twins of twins are one group
+function unite(items, pairs) {
+  const parent = new Map(items.map((x) => [x, x]))
+  const find = (x) => { while (parent.get(x) !== x) { parent.set(x, parent.get(parent.get(x))); x = parent.get(x) } return x }
+  for (const [a, b] of pairs) parent.set(find(a), find(b))
+  return [...groupBy(items, (x) => find(x)).values()].filter((g) => g.length > 1)
+}
+
+/* ---------- whole folders twice ---------- */
+/* A folder whose every file has an exact twin, and another folder holding the same twins, file for file, are the same
+   folder twice (whatever the files are called). Only the outermost such folders are shown (a subfolder of two twins
+   is not news), and the file groups that lie wholly inside them are then shown there only. */
+function dupFolders(files, exactGroups, roots) {
+  const gid = new Map()
+  exactGroups.forEach((g, i) => g.forEach((f) => gid.set(f, i)))
+  const dirs = new Map()
+  for (const f of files) {
+    let d = f.dir
+    for (;;) {
+      let e = dirs.get(d)
+      if (!e) dirs.set(d, (e = { path: d, ids: [], size: 0, n: 0, ok: true, mtime: 0 }))
+      const id = gid.get(f)
+      if (id == null) e.ok = false; else e.ids.push(id)
+      e.size += f.size; e.n++; e.mtime = Math.max(e.mtime, f.mtime)
+      if (roots.includes(d)) break
+      const up = path.dirname(d)
+      if (up === d) break
+      d = up
+    }
+  }
+  const sig = (e) => crypto.createHash('sha1').update(e.ids.sort((a, b) => a - b).join(',')).digest('hex')
+  const bySig = groupBy([...dirs.values()].filter((e) => e.ok && e.n >= 2), sig)
+  const groups = [...bySig.values()]
+    // a folder that only wraps its twin (old/ holding nothing but CARD_A copy/) gives way to the folder inside it
+    .map((l) => l.filter((e) => !l.some((o) => o !== e && inside(o.path, e.path))))
+    .filter((l) => l.length > 1)
+    .sort((a, b) => b[0].size - a[0].size)
+  const taken = []
+  const out = []
+  for (const l of groups) {
+    if (l.every((e) => taken.some((t) => inside(e.path, t)))) continue
+    l.forEach((e) => taken.push(e.path))
+    out.push(l.map((e) => ({ path: e.path, name: path.basename(e.path) || e.path, dir: path.dirname(e.path), size: e.size, mtime: e.mtime, count: e.n, folder: true })))
+  }
+  return out
+}
+
+/* ---------- a video that is a part of a longer one ---------- */
+/* Every video, one frame a second, each a 9x8 fingerprint. A shorter video whose frames match a stretch of a longer one,
+   frame for frame, is a part of it (a trim, a teaser cut out of the full clip), and where it starts is kept. Reading
+   every video through takes time, so it is a choice of its own. */
+async function framesPerSecond(bin, f, stop) {
+  const n = Math.ceil(f.video.dur) + 2
+  const { out } = await ff(bin, ['-i', f.path, '-an', '-sn', '-vf', 'fps=1,scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, n * 72 + 1024, Math.max(60e3, f.video.dur * 1500))
+  const prints = []
+  for (let i = 0; i + 72 <= out.length; i += 72) prints.push(split64(dhash(out.subarray(i, i + 72))))
+  return prints
+}
+// the second of the long video where the short one starts, or -1: of every place where it fits, the closest
+function partAt(sp, lp) {
+  const valid = sp.map((x, i) => (x ? i : -1)).filter((i) => i >= 0)
+  if (valid.length < 3 || lp.length < sp.length) return -1
+  const a = valid[Math.floor(valid.length / 2)]
+  let best = -1, bestMean = Infinity
+  for (let k = 0; k + sp.length <= lp.length + 1; k++) {
+    const at = lp[k + a]
+    if (!at || ham64(sp[a], at) > 10) continue
+    const d = []
+    for (const i of valid) if (lp[k + i]) d.push(ham64(sp[i], lp[k + i]))
+    if (d.length < Math.max(3, valid.length * 0.6)) continue
+    d.sort((x, y) => x - y)
+    if (d[Math.floor(d.length / 2)] > 8 || d.filter((x) => x <= 12).length / d.length < 0.75) continue
+    const mean = d.reduce((x, y) => x + y, 0) / d.length
+    if (mean < bestMean) { bestMean = mean; best = k }
+  }
+  return best
+}
+async function parts(bin, videos, tick, stop) {
+  let done = 0
+  tick({ stage: 'video', done, total: videos.length })
+  await pool(videos, 3, async (f) => { if (!f.video) f.video = await probe(bin, f.path, stop); done++; tick({ stage: 'video', done, total: videos.length }) }, stop)
+  const ok = videos.filter((f) => f.video && f.video.dur >= 3 && f.video.dur <= 3 * 3600)
+  const pairs = []
+  for (const s of ok) for (const l of ok) if (s !== l && s.video.dur <= 900 && l.video.dur > s.video.dur * 1.1 + 1) pairs.push([s, l])
+  const need = [...new Set(pairs.flat())]
+  done = 0
+  tick({ stage: 'parts', done, total: need.length })
+  await pool(need, 2, async (f) => { if (!f.secs) f.secs = await framesPerSecond(bin, f, stop); done++; tick({ stage: 'parts', done, total: need.length }) }, stop)
+  const found = []
+  const seen = new Set()
+  // the longest video a short one is part of
+  for (const [s, l] of pairs.sort((a, b) => b[1].video.dur - a[1].video.dur)) {
+    if (seen.has(s)) continue
+    const k = partAt(s.secs, l.secs)
+    if (k >= 0) { seen.add(s); s.partAt = k; found.push([l, s]) }
+  }
+  return found
+}
+
+/* ---------- similar photos ---------- */
+/* Each picture shrunk to a 9x8 fingerprint: the same photo saved again, resized or re-compressed, and shots of a burst
+   that are nearly alike come out within a few bits of each other. Pictures of another shape are never alike. */
+async function photos(bin, images, tick, stop) {
+  let done = 0
+  tick({ stage: 'photos', done, total: images.length })
+  await pool(images, 4, async (f) => {
+    const { out, log } = await ff(bin, ['-i', f.path, '-frames:v', '1', '-vf', 'scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
+    f.print = split64(dhash(out))
+    const v = log.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
+    f.dims = v ? { w: +v[1], h: +v[2] } : null
+    done++; if (done % 10 === 0 || done === images.length) tick({ stage: 'photos', done, total: images.length })
+  }, stop)
+  const ok = images.filter((f) => f.print && f.dims)
+  const pairs = []
+  for (let i = 0; i < ok.length; i++) {
+    if (i % 500 === 0 && stop()) throw new Stopped()
+    const a = ok[i], ra = a.dims.w / a.dims.h
+    for (let j = i + 1; j < ok.length; j++) {
+      const b = ok[j]
+      if (Math.abs(ra - b.dims.w / b.dims.h) > 0.03 * ra) continue
+      if (ham64(a.print, b.print) <= 6) pairs.push([a, b])
+    }
+  }
+  return unite(ok, pairs)
+}
+
+/* ---------- the same sound in another file ---------- */
+/* WAV, AIFF, MP3, M4A of the same recording: about the same length, then the sound itself compared, the way audio
+   fingerprints work (Haitsma and Kalker): 40 seconds from a tenth of the way in, as 32 bits every 46 ms that say
+   whether the energy rises or falls between 33 bands from 300 Hz to 2 kHz and from one moment to the next. The same
+   recording in another format keeps almost every bit; another recording keeps about half. Silence is left out. */
+function parseAudio(log) {
+  const m = log.match(/Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)/)
+  const a = log.match(/Stream #[^\n]*?Audio:\s*([a-z0-9_]+)[^\n]*?(\d{4,6}) Hz/i)
+  if (!m || !a) return null
+  const br = (log.match(/Audio:[^\n]*?(\d+) kb\/s/) || [])[1]
+  return { dur: (+m[1]) * 3600 + (+m[2]) * 60 + parseFloat(m[3]), codec: a[1].toLowerCase(), rate: +a[2], kbps: br ? +br : null }
+}
+const RATE = 11025, WIN = 2048, HOP = 512, BANDS = 33
+const EDGES = Array.from({ length: BANDS + 1 }, (_, i) => Math.round(300 * Math.pow(2000 / 300, i / BANDS) * WIN / RATE))
+const HANN = Float64Array.from({ length: WIN }, (_, i) => 0.5 - 0.5 * Math.cos((2 * Math.PI * i) / (WIN - 1)))
+function fftMag(re) {
+  const n = re.length, im = new Float64Array(n)
+  for (let i = 1, j = 0; i < n; i++) { let bit = n >> 1; for (; j & bit; bit >>= 1) j ^= bit; j ^= bit; if (i < j) { const t = re[i]; re[i] = re[j]; re[j] = t } }
+  for (let len = 2; len <= n; len <<= 1) {
+    const ang = (-2 * Math.PI) / len, wr = Math.cos(ang), wi = Math.sin(ang)
+    for (let i = 0; i < n; i += len) {
+      let cr = 1, ci = 0
+      for (let k = 0; k < len / 2; k++) {
+        const a = i + k, b = a + len / 2
+        const tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr
+        re[b] = re[a] - tr; im[b] = im[a] - ti; re[a] += tr; im[a] += ti
+        const nr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = nr
+      }
+    }
+  }
+  return (k) => re[k] * re[k] + im[k] * im[k]
+}
+function soundPrint(pcm) {
+  const frames = []
+  let prev = null
+  for (let at = 0; at + WIN <= pcm.length; at += HOP) {
+    const buf = new Float64Array(WIN)
+    let energy = 0
+    for (let i = 0; i < WIN; i++) { buf[i] = pcm[at + i] * HANN[i]; energy += buf[i] * buf[i] }
+    const mag = fftMag(buf)
+    const e = new Float64Array(BANDS)
+    for (let b = 0; b < BANDS; b++) { let sum = 0; for (let k = EDGES[b]; k < EDGES[b + 1]; k++) sum += mag(k); e[b] = sum }
+    if (prev) {
+      let bits = 0
+      for (let b = 0; b < 32; b++) if ((e[b] - e[b + 1]) - (prev[b] - prev[b + 1]) > 0) bits |= 1 << b
+      frames.push(energy / WIN > 4e-5 ? bits >>> 0 : null)
+    }
+    prev = e
+  }
+  return frames
+}
+async function soundOf(bin, f, stop) {
+  const from = Math.min(30, f.audio.dur * 0.1)
+  const { out } = await ff(bin, ['-ss', from.toFixed(2), '-i', f.path, '-t', '40', '-vn', '-ac', '1', '-ar', String(RATE), '-f', 's16le', '-'], stop, RATE * 2 * 42)
+  const pcm = new Float64Array(out.length >> 1)
+  for (let i = 0; i < pcm.length; i++) pcm[i] = out.readInt16LE(i * 2) / 32768
+  return soundPrint(pcm)
+}
+// the share of bits that differ at the best of a few small shifts (an encoder's delay), or 1 when too little to say
+function soundDiff(a, b) {
+  let best = 1
+  for (let s = -4; s <= 4; s++) {
+    let bits = 0, n = 0
+    for (let i = Math.max(0, -s); i < a.length && i + s < b.length; i++) {
+      const x = a[i], y = b[i + s]
+      if (x == null || y == null) continue
+      bits += pop32((x ^ y) | 0); n++
+    }
+    if (n >= 60) best = Math.min(best, bits / (n * 32))
+  }
+  return best
+}
+async function sounds(bin, list, tick, stop) {
+  let done = 0
+  tick({ stage: 'sound', done, total: list.length })
+  await pool(list, 3, async (f) => { const { log } = await ff(bin, ['-i', f.path], stop); f.audio = parseAudio(log); done++; tick({ stage: 'sound', done, total: list.length }) }, stop)
+  const ok = list.filter((f) => f.audio && f.audio.dur >= 5).sort((a, b) => a.audio.dur - b.audio.dur)
+  const pairs = []
+  for (let i = 0; i < ok.length; i++) for (let j = i + 1; j < ok.length && closeLength(ok[i].audio.dur, ok[j].audio.dur); j++) pairs.push([ok[i], ok[j]])
+  const need = [...new Set(pairs.flat())]
+  done = 0
+  tick({ stage: 'listen', done, total: need.length })
+  await pool(need, 2, async (f) => { if (!f.sound) f.sound = await soundOf(bin, f, stop); done++; tick({ stage: 'listen', done, total: need.length }) }, stop)
+  return unite(need, pairs.filter(([a, b]) => soundDiff(a.sound, b.sound) <= 0.2))
 }
 
 /* a small picture of a video or an image, as a data URL */
@@ -248,21 +480,40 @@ async function thumb(bin, f, stop) {
 }
 
 /*
- * scan({ roots, kind: 'all' | 'video' | 'image' | 'audio', similar, minSize, skipHidden, skipCloud, ffmpeg }, tick, stop) ->
- *   { groups: [{ id, kind: 'exact' | 'similar', size, free, files: [{ path, name, dir, size, mtime, video, thumb, keep }] }], files, took }
+ * scan({ roots, protect, kind: 'all' | 'video' | 'image' | 'audio', similar, parts, photos, sounds, proxies, minSize,
+ *        skipHidden, skipCloud, ffmpeg }, tick, stop) ->
+ *   { groups: [{ id, kind, size, free, files: [{ path, name, dir, size, mtime, video, thumb, keep, protected, ... }] }],
+ *     files, took, cloud }
+ * kind of a group: 'exact', 'similar' (the same video), 'folder' (the same folder twice), 'part' (a part of a longer
+ * video), 'photo' (similar photos), 'sound' (the same sound) or 'orphan' (a proxy whose original is not in the scan).
  * tick(progress) is called often; stop() returning true ends the scan with a Stopped error.
  */
 async function scan(opts, tick = () => {}, stop = () => false) {
   const t0 = Date.now()
   const roots = [...new Set((opts.roots || []).map((r) => path.resolve(r)))]
+  const protect = [...new Set((opts.protect || []).map((r) => path.resolve(r)))]
   const cloud = []
   const files = await list(roots, opts, tick, stop, cloud)
+  for (const f of files) if (protect.some((p) => inside(f.path, p))) f.protected = true
+  const kind = opts.kind || (opts.videosOnly ? 'video' : 'all')
+  const keepProxies = opts.proxies !== false
   const exactGroups = await exact(files, tick, stop)
   const out = exactGroups.map((g) => ({ kind: 'exact', files: g }))
-  if (opts.similar !== false && opts.ffmpeg) {
-    // one file of each exact group stands for it; the rest are already twins
-    const inExact = new Set(exactGroups.flatMap((g) => g.slice(1)))
-    const videos = files.filter((f) => isVideo(f.name) && !inExact.has(f))
+  // one file of each exact group stands for it; the rest are already twins
+  const inExact = new Set(exactGroups.flatMap((g) => g.slice(1)))
+  if (opts.folders !== false) {
+    tick({ stage: 'folders' })
+    const fold = dupFolders(files, exactGroups, roots)
+    for (const g of fold) {
+      for (const d of g) if (protect.some((p) => inside(d.path, p))) d.protected = true
+      out.push({ kind: 'folder', files: g })
+    }
+    // file groups wholly inside the twin folders are shown there only
+    const dirs = fold.flat().map((d) => d.path)
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'exact' && out[i].files.every((f) => dirs.some((d) => inside(f.path, d)))) out.splice(i, 1)
+  }
+  const videos = opts.ffmpeg && (kind === 'all' || kind === 'video') ? files.filter((f) => isVideo(f.name) && !inExact.has(f) && !(keepProxies && isProxy(f))) : []
+  if (opts.similar !== false && videos.length) {
     const sim = await similar(opts.ffmpeg, videos, tick, stop)
     for (const g of sim) {
       // a group that is all one exact copy is not news; otherwise bring the exact copies of its members in too
@@ -276,26 +527,109 @@ async function scan(opts, tick = () => {}, stop = () => false) {
     const shown = new Set(out.filter((g) => g.kind === 'similar').flatMap((g) => g.files))
     for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'exact' && out[i].files.every((f) => shown.has(f))) out.splice(i, 1)
   }
+  if (opts.parts && videos.length) {
+    const together = new Map()
+    out.filter((g) => g.kind === 'similar').forEach((g, i) => g.files.forEach((f) => together.set(f, i)))
+    for (const [l, sh] of await parts(opts.ffmpeg, videos, tick, stop)) {
+      if (together.has(l) && together.get(l) === together.get(sh)) continue
+      out.push({ kind: 'part', files: [l, sh] })
+    }
+  }
+  if (opts.photos !== false && opts.ffmpeg && (kind === 'all' || kind === 'image')) {
+    const images = files.filter((f) => isImage(f.name) && f.size >= 30e3 && !inExact.has(f))
+    for (const g of await photos(opts.ffmpeg, images, tick, stop)) {
+      const all = new Set(g)
+      for (const e of exactGroups) if (all.has(e[0])) e.forEach((f) => all.add(f))
+      out.push({ kind: 'photo', files: [...all] })
+    }
+    const shown = new Set(out.filter((g) => g.kind === 'photo').flatMap((g) => g.files))
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'exact' && out[i].files.every((f) => shown.has(f))) out.splice(i, 1)
+  }
+  if (opts.sounds !== false && opts.ffmpeg && (kind === 'all' || kind === 'audio')) {
+    const list2 = files.filter((f) => isAudio(f.name) && !inExact.has(f))
+    for (const g of await sounds(opts.ffmpeg, list2, tick, stop)) {
+      const all = new Set(g)
+      for (const e of exactGroups) if (all.has(e[0])) e.forEach((f) => all.add(f))
+      const members = [...all]
+      if (members.every((f) => f.hash && f.hash === members[0].hash)) continue
+      out.push({ kind: 'sound', files: members })
+    }
+    const shown = new Set(out.filter((g) => g.kind === 'sound').flatMap((g) => g.files))
+    for (let i = out.length - 1; i >= 0; i--) if (out[i].kind === 'exact' && out[i].files.every((f) => shown.has(f))) out.splice(i, 1)
+  }
+  // proxies whose original is nowhere in the folders looked at: listed apart, one a group, nothing chosen
+  if (keepProxies && (kind === 'all' || kind === 'video')) {
+    const originals = new Set(files.filter((f) => isVideo(f.name) && !isProxy(f)).map((f) => proxyBase(f.name)))
+    for (const f of files) if (isVideo(f.name) && isProxy(f) && !originals.has(proxyBase(f.name))) out.push({ kind: 'orphan', files: [f] })
+  }
   // what each file is, the one to keep, a picture
-  const all = out.flatMap((g) => g.files)
+  const all = out.flatMap((g) => g.files).filter((f) => !f.folder)
   let done = 0
   if (opts.ffmpeg) {
     tick({ stage: 'thumbs', done, total: all.length })
     await pool(all, 3, async (f) => {
       if (isVideo(f.name) && !f.video) f.video = await probe(opts.ffmpeg, f.path, stop)
-      if ((isVideo(f.name) && f.video) || isImage(f.name)) f.thumb = await thumb(opts.ffmpeg, f, stop)
+      if ((isVideo(f.name) && f.video) || isImage(f.name)) { if (!f.thumb) f.thumb = await thumb(opts.ffmpeg, f, stop) }
       done++; tick({ stage: 'thumbs', done, total: all.length })
     }, stop)
   }
   const groups = out.map((g, i) => {
-    const keep = suggest(g.files, g.kind)
+    const keep = g.kind === 'orphan' ? null : suggest(g.files, g.kind)
     const size = g.files.reduce((a, f) => a + f.size, 0)
     return {
-      id: 'g' + i, kind: g.kind, size, free: size - keep.size,
-      files: g.files.map((f) => ({ path: f.path, name: f.name, dir: f.dir, size: f.size, mtime: f.mtime, video: f.video || null, thumb: f.thumb || '', keep: f === keep })),
+      id: 'g' + i, kind: g.kind, size, free: keep ? size - keep.size : size,
+      files: g.files.map((f) => ({
+        path: f.path, name: f.name, dir: f.dir, size: f.size, mtime: f.mtime, video: f.video || null, thumb: f.thumb || '', keep: f === keep,
+        protected: !!f.protected, folder: !!f.folder, count: f.count || 0, partAt: f.partAt ?? null, audio: f.audio || null, dims: f.dims || null, proxy: !f.folder && isProxy(f),
+      })),
     }
   }).sort((a, b) => b.free - a.free)
-  return { groups, files: files.length, took: Date.now() - t0, cloud }
+  return { groups, files: files.length, took: Date.now() - t0, cloud, protect }
 }
 
-module.exports = { scan, Stopped, parseProbe, dhash, hamming, samePictures, isVideo }
+/* ---------- is every file of the originals on the backup? ---------- */
+/* Every file under the originals (a card, a shoot) is looked for on the backup by what it holds, not by its name or
+   place: the same size, the same samples, then the same SHA-256 of the whole file. A file with no such twin on the
+   backup is missing; if a file sits at the same place on the backup with other bytes, it is different there. */
+async function backupCheck(opts, tick = () => {}, stop = () => false) {
+  const t0 = Date.now()
+  const source = path.resolve(opts.source), backup = path.resolve(opts.backup)
+  if (inside(backup, source) || inside(source, backup)) throw new Error('The originals and the backup cannot be one inside the other.')
+  const lo = { skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false, minSize: 1 }
+  const cloud = []
+  const src = await list([source], lo, tick, stop, cloud)
+  const dst = await list([backup], lo, tick, stop, cloud)
+  const bySize = groupBy(dst, (f) => String(f.size))
+  const need = new Set()
+  for (const f of src) { const c = bySize.get(String(f.size)); if (c) { need.add(f); c.forEach((x) => need.add(x)) } }
+  let done = 0
+  const sampled = [...need]
+  await pool(sampled, 6, async (f) => { try { f.sample = await sampleHash(f) } catch { f.sample = null } if (++done % 50 === 0) tick({ stage: 'compare', done, total: sampled.length }) }, stop)
+  tick({ stage: 'compare', done, total: sampled.length })
+  // the files to read whole: each original with a sample twin, and those twins
+  const cands = new Map()
+  for (const f of src) {
+    const c = f.sample ? (bySize.get(String(f.size)) || []).filter((x) => x.sample === f.sample) : []
+    if (c.length) cands.set(f, c)
+  }
+  const toRead = [...new Set([...cands.keys(), ...[...cands.values()].flat()])]
+  const bytesTotal = toRead.reduce((a, f) => a + f.size, 0)
+  let bytesDone = 0, last = 0
+  tick({ stage: 'hash', bytesDone, bytesTotal })
+  await pool(toRead, 2, async (f) => {
+    try { f.hash = await fullHash(f, (n) => { bytesDone += n; if (Date.now() - last > 250) { last = Date.now(); tick({ stage: 'hash', bytesDone, bytesTotal }) } }, stop) } catch (e) { if (e instanceof Stopped) throw e; f.hash = null }
+  }, stop)
+  const atPlace = new Map(dst.map((f) => [path.relative(backup, f.path), f]))
+  const missing = []
+  let safe = 0, safeBytes = 0
+  for (const f of src) {
+    const ok = f.hash && (cands.get(f) || []).some((x) => x.hash === f.hash)
+    if (ok) { safe++; safeBytes += f.size; continue }
+    const there = atPlace.get(path.relative(source, f.path))
+    missing.push({ path: f.path, name: f.name, dir: f.dir, size: f.size, mtime: f.mtime, why: there ? 'differs' : 'missing', other: there ? there.path : '' })
+  }
+  missing.sort((a, b) => b.size - a.size)
+  return { mode: 'backup', source, backup, total: src.length, totalBytes: src.reduce((a, f) => a + f.size, 0), safe, safeBytes, missing, cloud, took: Date.now() - t0 }
+}
+
+module.exports = { scan, backupCheck, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }
