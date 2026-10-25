@@ -185,3 +185,8 @@ main { flex: 1; min-height: 0; overflow: auto; }
 /* many kinds of twins: the tabs scroll sideways rather than push the buttons off the row */
 .top .seg { flex: 0 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; }
 .top .seg::-webkit-scrollbar { display: none; }
+/* Make a twin: each drive the card went to, with its report */
+.verdict .paths .dest { display: flex; align-items: center; gap: 10px; margin-top: 6px; min-width: 0; }
+.verdict .paths .dest span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.verdict .paths { white-space: normal; }
+.f-meta .chip.tint { white-space: normal; height: auto; min-height: 22px; padding: 3px 9px; }

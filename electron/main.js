@@ -111,6 +111,26 @@ ipcMain.handle('twin:scan', async (e, opts) => {
   } finally { scanning = false; powerSaveBlocker.stop(awake) }
 })
 ipcMain.handle('twin:stop', () => { stopNow = true; return true })
+// make a twin: a card copied to one or more drives, every copy read back and checked (Alex, 25 Oct). It only ever
+// adds files; nothing is written over or deleted.
+let lastCopy = null
+ipcMain.handle('twin:copy', async (e, opts) => {
+  if (scanning) throw new Error('A scan is already running.')
+  const dirOk = (p) => { try { return fs.statSync(String(p)).isDirectory() } catch { return false } }
+  const targets = (Array.isArray(opts?.targets) ? opts.targets : []).map(String).filter(dirOk)
+  if (!dirOk(opts?.source) || !targets.length) throw new Error('Choose the card and where it is copied first.')
+  scanning = true; stopNow = false
+  const awake = powerSaveBlocker.start('prevent-app-suspension')
+  let lastTick = 0
+  const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
+  try {
+    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, skipHidden: opts.skipHidden !== false }, tick, () => stopNow)
+    return lastCopy
+  } catch (err) {
+    if (err instanceof engine.Stopped) return { stopped: true }
+    throw err
+  } finally { scanning = false; powerSaveBlocker.stop(awake) }
+})
 // is every file of the originals on the backup? (Alex, 25 Oct) Reads only; changes nothing.
 let lastBackup = null
 ipcMain.handle('twin:backup', async (e, opts) => {
@@ -156,6 +176,7 @@ ipcMain.handle('twin:trash', async (_e, paths) => {
 })
 const known = (p) => (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
+  || !!lastCopy && [...lastCopy.reports, ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
 ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemInFolder(String(p)) })
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)

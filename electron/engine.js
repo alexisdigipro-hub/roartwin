@@ -10,6 +10,8 @@
 // 3. More (Alex, 25 Oct, after a look at what other duplicate finders do): whole folders twice, a video that is a
 //    part of a longer one, similar photos, the same sound in another file, editing proxies kept apart, folders marked
 //    Masters (never offered for the Trash), and a backup check (is every file of the originals on the backup?).
+// 4. Make a twin (Alex, 25 Oct, for the cards of a shoot): a copy of a folder to one or more drives at once, each file
+//    read back from every drive and checked against the card's SHA-256, so nothing arrives corrupted.
 // Plain Node, no Electron: test/engine.test.js runs it as it is.
 const fs = require('fs')
 const fsp = fs.promises
@@ -98,7 +100,7 @@ async function list(roots, opts, tick, stop, skipped = []) {
       if (only && !only(e.name)) continue
       let st
       try { st = await fsp.stat(p) } catch { continue }
-      if (st.size < Math.max(1, opts.minSize || 0)) continue
+      if (st.size < Math.max(opts.keepEmpty ? 0 : 1, opts.minSize || 0)) continue
       const key = `${st.dev}:${st.ino}`
       if (st.ino && seen.has(key)) continue
       seen.add(key)
@@ -632,4 +634,110 @@ async function backupCheck(opts, tick = () => {}, stop = () => false) {
   return { mode: 'backup', source, backup, total: src.length, totalBytes: src.reduce((a, f) => a + f.size, 0), safe, safeBytes, missing, cloud, took: Date.now() - t0 }
 }
 
-module.exports = { scan, backupCheck, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }
+/* ---------- make a twin: copy a card to one or more drives, and check every copy ---------- */
+/* The card is read once; each piece goes to every drive at the same time, and the card's SHA-256 is worked out on the
+   way. Each file is written under a temporary name and only takes its own name once whole, with the card's dates. Then
+   every copy is read back from its drive and its SHA-256 compared with the card's: the same, or it is reported. Nothing
+   is ever written over: a file already there with the same bytes counts as copied, one with other bytes is reported
+   and left alone. Each copy gets a report (CSV: every file, its size, its SHA-256, the result). */
+const PART = '.roartwin-part'
+const stamp = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`
+async function hashFile(p, onBytes, stop) { return fullHash({ path: p }, onBytes, stop) }
+async function makeTwin(opts, tick = () => {}, stop = () => false) {
+  const t0 = Date.now()
+  const source = path.resolve(opts.source)
+  const targets = [...new Set((opts.targets || []).map((t) => path.resolve(t)))]
+  if (!targets.length) throw new Error('Choose where the copy goes.')
+  for (const t of targets) if (inside(t, source) || inside(source, t)) throw new Error('The card and where it is copied cannot be one inside the other.')
+  const name = path.basename(source) || 'Copy'
+  const files = await list([source], { skipHidden: opts.skipHidden !== false, skipCloud: false, keepEmpty: true }, tick, stop, [])
+  const bytesTotal = files.reduce((a, f) => a + f.size, 0)
+  // room on every drive first
+  for (const t of targets) {
+    try {
+      const st = await fsp.statfs(t)
+      const free = st.bavail * st.bsize
+      if (free < bytesTotal) throw Object.assign(new Error(`Not enough room on ${t}: the copy needs ${(bytesTotal / 1e9).toFixed(1)} GB, ${(free / 1e9).toFixed(1)} GB are free.`), { room: true })
+    } catch (e) { if (e.room) throw e }
+  }
+  const dests = targets.map((t) => path.join(t, name))
+  const rows = new Map(files.map((f) => [f, { file: f, rel: path.relative(source, f.path), hash: '', results: dests.map(() => '') }]))
+  const failed = []
+  const fail = (f, i, error) => { rows.get(f).results[i] = 'failed'; failed.push({ path: f.path, name: f.name, target: dests[i], error }) }
+  let bytesDone = 0, last = 0
+  const report = (stage) => { if (Date.now() - last > 250) { last = Date.now(); tick({ stage, bytesDone, bytesTotal }) } }
+  tick({ stage: 'copy', bytesDone, bytesTotal })
+  for (const f of files) {
+    if (stop()) throw new Stopped()
+    const row = rows.get(f)
+    const outs = []
+    for (let i = 0; i < dests.length; i++) {
+      const to = path.join(dests[i], row.rel)
+      try {
+        const there = await fsp.stat(to).catch(() => null)
+        if (there) { row.results[i] = there.size === f.size ? 'check' : 'failed'; if (there.size !== f.size) fail(f, i, 'A different file with this name is already there; it was left alone.'); continue }
+        await fsp.mkdir(path.dirname(to), { recursive: true })
+        outs.push({ i, to, tmp: to + PART, fh: await fsp.open(to + PART, 'wx') })
+      } catch (e) { fail(f, i, String(e?.message || e)) }
+    }
+    const h = crypto.createHash('sha256')
+    try {
+      const rs = fs.createReadStream(f.path, { highWaterMark: 4 * 1024 * 1024 })
+      for await (const chunk of rs) {
+        if (stop()) { rs.destroy(); throw new Stopped() }
+        h.update(chunk)
+        await Promise.all(outs.filter((o) => !o.err).map((o) => o.fh.write(chunk).catch((e) => { o.err = e })))
+        bytesDone += chunk.length; report('copy')
+      }
+      row.hash = h.digest('hex')
+    } catch (e) {
+      for (const o of outs) { await o.fh.close().catch(() => {}); await fsp.rm(o.tmp, { force: true }) }
+      if (e instanceof Stopped) throw e
+      dests.forEach((_, i) => { if (row.results[i] !== 'failed') fail(f, i, 'The card could not be read: ' + (e?.message || e)) })
+      continue
+    }
+    for (const o of outs) {
+      try {
+        if (o.err) throw o.err
+        await o.fh.sync(); await o.fh.close()
+        await fsp.rename(o.tmp, o.to)
+        await fsp.utimes(o.to, new Date(), new Date(f.mtime))
+        row.results[o.i] = 'written'
+      } catch (e) { await o.fh.close().catch(() => {}); await fsp.rm(o.tmp, { force: true }); fail(f, o.i, String(e?.message || e)) }
+    }
+  }
+  // every copy read back from its drive
+  const toCheck = []
+  for (const row of rows.values()) row.results.forEach((r, i) => { if (r === 'written' || r === 'check') toCheck.push([row, i]) })
+  const vTotal = toCheck.reduce((a, [row]) => a + row.file.size, 0)
+  let vDone = 0
+  last = 0
+  tick({ stage: 'verify', bytesDone: 0, bytesTotal: vTotal })
+  for (const [row, i] of toCheck) {
+    const to = path.join(dests[i], row.rel)
+    let got = ''
+    try { got = await hashFile(to, (n) => { vDone += n; if (Date.now() - last > 250) { last = Date.now(); tick({ stage: 'verify', bytesDone: vDone, bytesTotal: vTotal }) } }, stop) } catch (e) { if (e instanceof Stopped) throw e }
+    if (got && got === row.hash) row.results[i] = row.results[i] === 'check' ? 'already there' : 'verified'
+    else fail(row.file, i, row.results[i] === 'check' ? 'A different file with this name is already there; it was left alone.' : 'The copy is not the same as the card (corrupted on the way). Copy it again.')
+  }
+  // the report, in each copy
+  const when = stamp()
+  const reports = []
+  const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`
+  for (let i = 0; i < dests.length; i++) {
+    const lines = [['File', 'Size (bytes)', 'SHA-256', 'Result'].map(q).join(',')]
+    for (const row of rows.values()) lines.push([row.rel, row.file.size, row.hash, row.results[i] || 'failed'].map(q).join(','))
+    const rp = path.join(dests[i], `_RoarTwin copy report ${when}.csv`)
+    try { await fsp.mkdir(dests[i], { recursive: true }); await fsp.writeFile(rp, '﻿' + lines.join('\r\n'), 'utf8'); reports.push(rp) } catch { /* the drive went away: the failures say so */ }
+  }
+  const ok = (r) => r === 'verified' || r === 'already there'
+  const all = [...rows.values()]
+  return {
+    mode: 'twin', source, targets: dests, reports, total: files.length, bytes: bytesTotal,
+    verified: all.filter((r) => r.results.every(ok)).length,
+    already: all.filter((r) => r.results.some((x) => x === 'already there')).length,
+    failed, took: Date.now() - t0,
+  }
+}
+
+module.exports = { scan, backupCheck, makeTwin, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }
