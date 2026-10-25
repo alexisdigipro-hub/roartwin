@@ -5,7 +5,7 @@ const fs = require('fs')
 const os = require('os')
 const path = require('path')
 const { execFileSync } = require('child_process')
-const { scan, backupCheck, parseProbe, parseAudio, Stopped } = require('../electron/engine')
+const { scan, backupCheck, makeTwin, parseProbe, parseAudio, Stopped } = require('../electron/engine')
 
 const bin = process.env.FFMPEG || require('ffmpeg-static')
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin-'))
@@ -157,5 +157,25 @@ async function more() {
     assert.strictEqual(b.total, 4); assert.strictEqual(b.safe, 2)
     assert.deepStrictEqual(b.missing.map((m) => [m.name, m.why]).sort(), [['B.mov', 'differs'], ['D.mov', 'missing']])
     await assert.rejects(backupCheck({ source: at2('card'), backup: at2('card/sub') }), /inside/)
+
+    // make a twin: the card to two drives, every copy checked; a file already there with the same bytes counts, one with
+    // other bytes is left alone and reported; dates kept; nothing half-written left behind
+    const old = new Date('2026-10-20T10:00:00Z')
+    fs.utimesSync(at2('card/A.mov'), old, old)
+    fs.writeFileSync(at2('driveB/card/D.mov'), 'take d\n'.repeat(4000)) // already there, the same
+    fs.writeFileSync(at2('driveB/card/sub/C.wav'), 'other!\n'.repeat(4000)) // already there, other bytes
+    fs.writeFileSync(at2('card/empty.txt'), '')
+    const tw = await makeTwin({ source: at2('card'), targets: [at2('driveA'), at2('driveB')] })
+    assert.strictEqual(tw.total, 5)
+    assert.strictEqual(fs.readFileSync(at2('driveA/card/sub/C.wav'), 'utf8'), fs.readFileSync(at2('card/sub/C.wav'), 'utf8'))
+    assert.strictEqual(fs.statSync(at2('driveA/card/A.mov')).mtimeMs, old.getTime(), 'the clip keeps its date')
+    assert.strictEqual(fs.readFileSync(at2('driveB/card/sub/C.wav'), 'utf8'), 'other!\n'.repeat(4000), 'never written over')
+    assert.deepStrictEqual(tw.failed.map((x) => [x.name, path.basename(path.dirname(x.target))]), [['C.wav', 'driveB']])
+    assert.strictEqual(tw.verified, 4); assert.strictEqual(tw.already, 1)
+    assert.ok(fs.existsSync(at2('driveA/card/empty.txt')), 'empty files come too')
+    assert.strictEqual(tw.reports.length, 2); assert.ok(fs.readFileSync(tw.reports[0], 'utf8').includes('verified'))
+    const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [e.name])
+    assert.ok(!walk(at2('driveA')).some((n) => n.endsWith('.roartwin-part')), 'no half copies')
+    await assert.rejects(makeTwin({ source: at2('card'), targets: [at2('card/sub')] }), /inside/)
   } finally { fs.rmSync(r2, { recursive: true, force: true }) }
 }

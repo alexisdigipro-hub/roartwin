@@ -2,7 +2,7 @@
 
 RoarTwin finds duplicate files on folders and drives, and the same video in another file. The Mad Lions Lab
 (Alex Konstantinidis, film director, Athens; not a developer). Talk to him in Greek, friendly and concrete, no em
-dashes; the app's own text is English.
+dashes; the app's own text is English by default, with Greek as a choice (app.js: `t()` and the `EL` table, English text as the key; every new text goes through `t()` and gets its Greek).
 
 - Electron app (Mac and Windows): `app/` is the page (plain HTML, CSS, ES modules, no build step, no dependencies);
   `electron/` the shell. ffmpeg comes with the app through the npm package ffmpeg-static (asarUnpack; main.js

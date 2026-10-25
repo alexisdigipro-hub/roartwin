@@ -32,6 +32,12 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
 - **Check a backup:** the originals on one side, the backup on the other; every file is looked for on the backup by its
   bytes (size, samples, SHA-256), wherever it sits and whatever it is called. What is missing, or different at the same
   place, is listed and can be saved as CSV. Nothing is changed.
+- **Make a twin** (for the cards of a shoot): a card copied to one or more drives at once (the card read once), each
+  file written under a temporary name and named only when whole, with the card's dates, then read back from every
+  drive and its SHA-256 checked against the card's. Nothing is written over (a file already there with the same bytes
+  counts as copied; one with other bytes is reported and left alone), nothing is deleted, there must be room first,
+  and each copy gets `_RoarTwin copy report <date>.csv` (every file, size, SHA-256, result).
+- **Language:** English by default; Ελληνικά under Language (every text of the page, kept per computer).
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
 ## Safe by design

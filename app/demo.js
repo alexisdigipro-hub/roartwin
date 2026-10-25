@@ -73,6 +73,17 @@ export function demoTwin() {
     trash: async (paths) => ({ ok: paths, failed: [] }),
     reveal: async () => {}, open: async () => {},
     exportCSV: async () => true,
+    copy: async () => {
+      stop = false
+      const tick = (p) => listeners.forEach((fn) => fn(p))
+      for (let i = 0; i <= 10; i++) { if (stop) return { stopped: true }; tick({ stage: 'copy', bytesDone: i * 25e9, bytesTotal: 250e9 }); await wait(50) }
+      for (let i = 0; i <= 10; i++) { if (stop) return { stopped: true }; tick({ stage: 'verify', bytesDone: i * 50e9, bytesTotal: 500e9 }); await wait(50) }
+      return {
+        mode: 'twin', source: '/Volumes/CARD_A', targets: ['/Volumes/SHUTTLE_1/CARD_A', '/Volumes/SHUTTLE_2/CARD_A'], reports: ['/Volumes/SHUTTLE_1/CARD_A/_RoarTwin copy report.csv', '/Volumes/SHUTTLE_2/CARD_A/_RoarTwin copy report.csv'],
+        total: 412, bytes: 250e9, verified: 411, already: 0, took: 2210e3,
+        failed: [{ path: '/Volumes/CARD_A/CLIP/A003_C021.mov', name: 'A003_C021.mov', target: '/Volumes/SHUTTLE_2/CARD_A', error: 'The copy is not the same as the card (corrupted on the way). Copy it again.' }],
+      }
+    },
     backup: async () => {
       stop = false
       const tick = (p) => listeners.forEach((fn) => fn(p))
