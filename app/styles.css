@@ -15,9 +15,11 @@ body::before { content: ''; position: fixed; inset: 0 0 auto; height: 420px; bac
 button, input, select { font: inherit; color: inherit; }
 button { cursor: pointer; }
 /* the side menu and the tool's column (Alex, 28 Oct: a utility of many tools) */
-#app { position: relative; height: 100%; display: grid; grid-template-columns: 228px minmax(0, 1fr); }
-.col { min-width: 0; height: 100%; display: flex; flex-direction: column; }
-.side { height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0 10px 12px; border-right: 1px solid var(--line); background: rgba(0,0,0,.14); overflow: hidden; }
+/* one row exactly the window's height: a long page scrolls inside its column instead of making the whole app taller
+   (Alex, 28 Oct: "it does not scroll") */
+#app { position: relative; height: 100%; display: grid; grid-template-columns: 228px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+.col { min-width: 0; min-height: 0; height: 100%; display: flex; flex-direction: column; }
+.side { min-height: 0; height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0 10px 12px; border-right: 1px solid var(--line); background: rgba(0,0,0,.14); overflow: hidden; }
 .side .wm { flex: none; height: 58px; display: flex; align-items: center; padding-left: 8px; -webkit-app-region: drag; }
 html.mac .side .wm { padding-left: 80px; }
 .side-list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; padding-top: 0; scrollbar-width: none; }
