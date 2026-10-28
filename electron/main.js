@@ -62,6 +62,9 @@ function open() {
       stopNow = true
     }
   })
+  // a swipe on the trackpad (Mac) and the mouse's or keyboard's back and forward keys (Windows) go back and forward
+  win.on('swipe', (_e, dir) => { if (dir === 'right') send('back'); if (dir === 'left') send('forward') })
+  win.on('app-command', (_e, cmd) => { if (cmd === 'browser-backward') send('back'); if (cmd === 'browser-forward') send('forward') })
   win.on('closed', () => { win = null })
 }
 
@@ -79,7 +82,12 @@ function menu() {
       ...(mac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
     ] },
     { role: 'editMenu' },
-    { label: 'View', submenu: [{ role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: 'View', submenu: [
+      // back and forward through the screens (Alex, 28 Oct)
+      { label: 'Back', accelerator: mac ? 'Cmd+[' : 'Alt+Left', click: () => send('back') },
+      { label: 'Forward', accelerator: mac ? 'Cmd+]' : 'Alt+Right', click: () => send('forward') },
+      { type: 'separator' },
+      { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ]))
 }

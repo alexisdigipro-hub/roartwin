@@ -25,6 +25,10 @@ The name: on screen RoarKit since 0.3.0; the app file is still RoarTwin.app for 
 only takes an app of that name. 0.3.0's updater takes any name, so the next release can be RoarKit.app (set productName,
 artifactName and the workflow's names then). Settings stay in the RoarTwin folder (main.js setPath) whatever the name.
 
+**Back and forward** (0.3.1): ← → at the start of the top row, Cmd+[ / Cmd+] (Alt+← / Alt+→ on Windows), a trackpad
+swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
+screen, e.g. Space map's folder, File manager's two folders, a report's result).
+
 ## Layout of the tools
 - `app/tools/<tool>.js`: a tool's page (`{ id, el, view(ctx), top(ctx), demo }`, see app/tools/index.js) and its
   `tools-<x>.css`; `electron/tools/<tool>.js`: its Mac/Windows side (`register(ctx)`, `ctx.handle('<tool>-<what>')`).

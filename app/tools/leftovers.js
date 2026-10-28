@@ -121,6 +121,8 @@ function viewStart(ctx) {
 }
 
 export default {
+  // back and forward (app.js): what makes this tool's screen
+  nav: { get: () => ({ res: st.res }), set: (s) => { st.res = s.res } },
   id: 'leftovers',
   el: {
     'What finished <b>projects</b> left behind.': 'Τι άφησαν πίσω τα <b>projects</b> που τελείωσαν.',

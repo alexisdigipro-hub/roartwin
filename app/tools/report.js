@@ -119,6 +119,8 @@ function clipEl(ctx, c) {
 }
 
 export default {
+  // back and forward (app.js): what makes this tool's screen
+  nav: { get: () => ({ res: st.res }), set: (s) => { st.res = s.res } },
   id: 'report',
   el: {
     ...EL_SHARED,

@@ -177,6 +177,8 @@ function viewStart(ctx) {
 }
 
 export default {
+  // back and forward (app.js): what makes this tool's screen
+  nav: { get: () => ({ res: st.res, node: st.node, trail: [...st.trail], tab: st.tab }), set: (s) => { st.res = s.res; st.node = s.node; st.trail = [...s.trail]; st.tab = s.tab } },
   id: 'space',
   el: {
     'Where did the <b>space</b> go?': 'Πού πήγε ο <b>χώρος</b>;',

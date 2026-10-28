@@ -241,3 +241,7 @@ a.chip { text-decoration: none; } a.chip:hover { color: var(--text); }
   .side-g small, .nav span:last-child, .side-meta { display: none; }
   .nav { justify-content: center; padding: 0; }
 }
+/* back and forward at the start of the top row (Alex, 28 Oct) */
+.navbtns { display: flex; gap: 6px; flex: none; }
+.navbtns .fwd svg { transform: scaleX(-1); }
+.navbtns .ib:disabled { opacity: .3; cursor: default; transform: none; }
