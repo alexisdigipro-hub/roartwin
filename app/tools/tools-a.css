@@ -36,5 +36,7 @@ button.sp-dir:hover { background: var(--glass-2); border-color: var(--edge); }
   .sp-dir .sp-bar { grid-column: 2 / -1; grid-row: 2; }
   .sp-file { grid-template-columns: auto minmax(0, 1fr) auto; }
   .sp-file .sp-ic { display: none; }
-  .sp-file .sp-meta { grid-column: 2 / -1; justify-content: flex-start; }
+  .sp-file .sp-meta { grid-column: 2 / -1; grid-row: 2; justify-content: flex-start; }
+  .sp-file > .ib { grid-column: 3; grid-row: 1; }
+  .sp-file > .check { grid-row: 1; }
 }

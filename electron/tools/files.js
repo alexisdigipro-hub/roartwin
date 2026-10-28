@@ -412,7 +412,10 @@ function register(ctx) {
     const out = []
     for (let i = 0; i < 6; i++) {
       const at = (v.dur * (i + 0.5)) / 6
-      const { out: jpg } = await ctx.engine.ff(bin(), ['-skip_frame', 'nokey', '-ss', at.toFixed(2), '-i', r, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], () => false, 400 * 1024, 20e3)
+      const grab = (key) => ctx.engine.ff(bin(), [...(key ? ['-skip_frame', 'nokey'] : []), '-ss', at.toFixed(2), '-i', r, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], () => false, 400 * 1024, 20e3)
+      // the nearest key frame is quick; with none after that point, the exact frame
+      let { out: jpg } = await grab(true)
+      if (jpg.length <= 100) jpg = (await grab(false)).out
       if (jpg.length > 100) out.push({ at, url: 'data:image/jpeg;base64,' + jpg.toString('base64') })
     }
     return out
@@ -447,7 +450,7 @@ function register(ctx) {
     ctx.allow?.(target)
     return target
   })
-  ctx.handle('files-transfer', async ({ paths, to, move }, { emit }) => {
+  ctx.handle('files-transfer', async ({ paths, to, move }, { emit } = {}) => {
     const list = (Array.isArray(paths) ? paths : []).map(must), dest = must(to)
     const st = await fsp.stat(dest).catch(() => null)
     if (!st?.isDirectory()) throw new Error('That folder is not there.')
@@ -456,7 +459,7 @@ function register(ctx) {
       const r = await transfer({ paths: list, to: dest, move: !!move }, {
         stop: () => ctx.stopped?.(),
         trash: (p) => ctx.shell.trashItem(p),
-        onProgress: (x) => { if (Date.now() - last > 150 || x.done === x.total) { last = Date.now(); emit('files-progress', x) } },
+        onProgress: (x) => { if (Date.now() - last > 150 || x.done === x.total) { last = Date.now(); emit?.('files-progress', x) } },
       })
       ctx.allow?.(r.ok)
       return r

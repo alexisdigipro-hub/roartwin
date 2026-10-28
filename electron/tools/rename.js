@@ -61,7 +61,8 @@ const TOKENS = ['date', 'time', 'project', 'cam', 'card', 'n', 'name', 'ext', 't
 function plan(files, rule = {}, folderNames = files.map((f) => f.name)) {
   const r = { pattern: '{name}', start: 1, pad: 3, dateFormat: 'YYYY-MM-DD', dateFrom: 'clip', case: 'keep', kind: 'all', ...rule }
   const only = Array.isArray(r.only) && r.only.length ? new Set(r.only) : null
-  const when = (f) => (r.dateFrom === 'clip' && f.meta?.created) || f.birth || f.mtime
+  // a clip's own date; else the file's modified date, which a copy keeps (its created date is the day of the copy)
+  const when = (f) => (r.dateFrom === 'clip' && f.meta?.created) || f.mtime
   const sel = files.filter((f) => (r.kind === 'all' || f.kind === r.kind) && (!only || only.has(f.name)))
     .sort((a, b) => when(a) - when(b) || a.name.localeCompare(b.name))
   const fmt = DATE[r.dateFormat] || DATE['YYYY-MM-DD']
@@ -161,7 +162,7 @@ function register(ctx) {
     const same = got.filter((g) => g.path === got[0].path)
     return { path: got[0].path, only: same.every((g) => g.only.length) ? same.flatMap((g) => g.only) : [] }
   })
-  ctx.handle('rename-scan', async ({ path: p }, { emit }) => {
+  ctx.handle('rename-scan', async ({ path: p }, { emit } = {}) => {
     const dir = must(p)
     return ctx.run(async () => { const files = await scan(dir, emit); cache.set(dir, files); return { count: files.length } })
   })

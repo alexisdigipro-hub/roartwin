@@ -66,7 +66,9 @@ function itemRow(ctx, i, recent) {
 function viewResult(ctx) {
   const { h, t, bytes, plural, seg, dur } = ctx
   const all = live(), old = offered(), recent = all.filter((i) => !old.includes(i))
-  const oldSize = old.reduce((n, i) => n + i.size, 0)
+  // what may go: not what sits in a Masters folder
+  const free = old.filter((i) => !i.protected)
+  const oldSize = free.reduce((n, i) => n + i.size, 0)
   const opt = (title, sub, control) => h('div', { class: 'opt' }, h('span', {}, h('b', {}, title), h('small', {}, sub)), control)
   const foot = st.sel.size ? h('div', { class: 'foot show sp-foot' }, h('span', {}, h('b', {}, plural(st.sel.size, 'folder')), ' · ', h('b', {}, bytes(pickedSize()))),
     h('button', { class: 'btn', onclick: () => { st.sel.clear(); ctx.draw() } }, t('Clear')),
@@ -80,7 +82,7 @@ function viewResult(ctx) {
     h('div', { class: 'opts' }, opt(t('Untouched for'), t('Only what has not changed for that long is offered.'),
       seg([[1, t('1 month')], [3, t('3 months')], [6, t('6 months')], [12, t('1 year')]], st.months, (v) => { st.months = v; save(ctx); for (const [p, i] of st.sel) if (i.newest >= cut()) st.sel.delete(p); ctx.draw() }))),
     h('div', { class: 'sum' },
-      h('span', { class: 'chip tint' }, h('i'), t('{n} to free in {f}', { n: bytes(oldSize), f: plural(old.length, 'folder') })),
+      h('span', { class: 'chip tint' }, h('i'), t('{n} to free in {f}', { n: bytes(oldSize), f: plural(free.length, 'folder') })),
       recent.length ? h('span', { class: 'chip' }, t('{n} still in use, left out', { n: plural(recent.length, 'folder') })) : null,
       h('span', { class: 'chip' }, t('in {t}', { t: dur(st.res.took / 1000) })),
       old.length ? h('button', { class: 'btn', style: { height: '28px', padding: '0 12px', fontSize: '12.5px' }, onclick: () => { for (const i of old) if (!i.protected) st.sel.set(i.path, i); ctx.draw() } }, t('Choose all')) : null),

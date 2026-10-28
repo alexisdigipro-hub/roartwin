@@ -64,7 +64,8 @@ At least one output file must be specified`
   const secs = files.sectionsOf(info, { name: 'A001_C003.mov', dir: '/Volumes/CARD', size: 28.6e9, mtime: Date.UTC(2026, 9, 14) })
   assert.deepStrictEqual(secs.map((s) => s.title), ['File', 'Container', 'Video #1', 'Audio #1', 'Data #1', 'Chapters', 'Metadata'])
   assert.ok(files.textOf(secs).includes('HDR: HLG'))
-  assert.strictEqual(files.parseInfo('Stream #0:0: Video: h264 (High), yuv420p(tv, bt709), 1920x1080, 25 fps').streams.length, 0, 'no Input line, still no crash')
+  assert.strictEqual(files.parseInfo('Stream #0:0: Video: h264 (High), yuv420p(tv, bt709), 1920x1080, 25 fps').streams[0].width, 1920, 'no Input line, still read')
+  assert.deepStrictEqual(files.parseInfo('').streams, [], 'nothing, no crash')
   // bt709 alone means all three
   const s709 = files.parseInfo("Input #0, mov, from 'x':\n  Stream #0:0: Video: h264 (High) (avc1 / 0x31637661), yuv420p(tv, bt709, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 8000 kb/s, 23.98 fps, 23.98 tbr").streams[0]
   assert.deepStrictEqual([s709.matrix, s709.primaries, s709.transfer, s709.fps, s709.bitDepth, s709.hdr], ['bt709', 'bt709', 'bt709', 23.98, 8, ''])
