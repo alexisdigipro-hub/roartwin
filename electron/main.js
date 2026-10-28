@@ -131,7 +131,7 @@ ipcMain.handle('twin:copy', async (e, opts) => {
   let lastTick = 0
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
-    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false }, tick, () => stopNow)
+    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false, version: app.getVersion() }, tick, () => stopNow)
     return lastCopy
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -306,7 +306,7 @@ tools.register(ctx)
 const known = (p) => shown.has(p) || (lastClean || []).some((c) => (c.found || []).includes(p))
   || (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
-  || !!lastCopy && [...lastCopy.reports, ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
+  || !!lastCopy && [...lastCopy.reports, ...(lastCopy.mhl || []), ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
 ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemInFolder(String(p)) })
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)

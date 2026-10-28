@@ -69,7 +69,7 @@ export default {
     const frac = run ? (run.phase === 'write' ? 0 : 0.5) + (run.total ? run.done / run.total : 0) / 2 : 0
     return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card sp' },
       h('div', { class: 'hero' }, h('h1', { html: t('How <b>fast</b> is this drive?') }),
-        h('p', {}, t('RoarTwin writes a test file, reads it back and removes it, then shows which codecs the drive can record and play.'))),
+        h('p', {}, t('A test file is written, read back and removed; then you see which codecs the drive can record and play.'))),
       ctx.dropOn(h('div', { class: 'drop' + (dir ? ' set' : '') }, h('div', { class: 'dz-i', html: ctx.I.drive }), h('b', {}, t('The drive to test')), h('small', {}, t('Drop a drive or a folder on it, or choose one.')),
         dir ? h('span', { class: 'root', title: dir }, ctx.ico('folder'), h('span', {}, dir), run ? null : h('button', { 'aria-label': t('Remove'), html: ctx.I.x, onclick: () => { dir = ''; result = null; ctx.draw() } })) : null,
         run ? null : h('button', { class: 'btn', onclick: async () => pick(await ctx.pick()) }, ctx.ico('plus'), dir ? t('Choose another…') : t('Choose…'))), run ? () => {} : pick),
@@ -85,7 +85,7 @@ export default {
   },
   el: {
     'How <b>fast</b> is this drive?': 'Πόσο <b>γρήγορος</b> είναι ο δίσκος;',
-    'RoarTwin writes a test file, reads it back and removes it, then shows which codecs the drive can record and play.': 'Το RoarTwin γράφει ένα δοκιμαστικό αρχείο, το ξαναδιαβάζει και το σβήνει, και μετά δείχνει ποια codecs μπορεί να γράψει και να παίξει ο δίσκος.',
+    'A test file is written, read back and removed; then you see which codecs the drive can record and play.': 'Γράφεται ένα δοκιμαστικό αρχείο, ξαναδιαβάζεται και σβήνεται· μετά βλέπεις ποια codecs μπορεί να γράψει και να παίξει ο δίσκος.',
     'The drive to test': 'Ο δίσκος για το τεστ', 'Drop a drive or a folder on it, or choose one.': 'Ρίξε εδώ έναν δίσκο ή φάκελο, ή διάλεξε έναν.',
     'Write': 'Εγγραφή', 'Read': 'Ανάγνωση', 'Writing {a} of {b}': 'Γράφει {a} από {b}', 'Reading {a} of {b}': 'Διαβάζει {a} από {b}',
     'Test file': 'Δοκιμαστικό αρχείο', 'Bigger is truer, and takes longer.': 'Όσο μεγαλύτερο, τόσο πιο αληθινό, και αργεί περισσότερο.',

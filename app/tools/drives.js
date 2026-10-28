@@ -38,7 +38,7 @@ function tile(ctx, d) {
           low ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)', height: '22px' } }, h('i'), t('Almost full')) : null)),
       h('div', { class: 'f-meta' },
         ...d.mounts.map((m) => h('span', { class: 'chip', title: m.path }, m.name + (m.fs ? ' · ' + m.fs : ''))),
-        d.report ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' }, title: d.report.folder }, h('i'), t('RoarTwin copy of {w}', { w: d.report.when.slice(0, 10) })) : null,
+        d.report ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' }, title: d.report.folder }, h('i'), t('Copied and checked on {w}', { w: d.report.when.slice(0, 10) })) : null,
         d.report ? h('button', { class: 'btn dh-check', onclick: () => { Object.assign(ctx.S, { mode: 'backup', bmode: 'report', copyDir: d.report.folder, view: 'home' }); ctx.draw() } }, t('Check it now')) : null)))
 }
 
@@ -67,7 +67,7 @@ export default {
     'The drive checks itself (SMART) and reports no problem.': 'Ο δίσκος ελέγχει τον εαυτό του (SMART) και δεν αναφέρει πρόβλημα.',
     'The drive reports it is failing. Copy what is on it to another drive now.': 'Ο δίσκος αναφέρει ότι χαλάει. Αντίγραψε τώρα ό,τι έχει σε άλλον δίσκο.',
     'Drives in USB cases and card readers often do not pass their health on. That is usual, not a fault.': 'Οι δίσκοι σε κουτιά USB και οι αναγνώστες καρτών συχνά δεν δίνουν την υγεία τους. Είναι φυσιολογικό, όχι βλάβη.',
-    '{a} free': '{a} ελεύθερα', 'of {b}': 'από {b}', 'Almost full': 'Σχεδόν γεμάτος', 'RoarTwin copy of {w}': 'Αντίγραφο RoarTwin της {w}',
+    '{a} free': '{a} ελεύθερα', 'of {b}': 'από {b}', 'Almost full': 'Σχεδόν γεμάτος', 'Copied and checked on {w}': 'Αντιγράφηκε και ελέγχθηκε στις {w}',
     'Check it now': 'Έλεγξέ το τώρα', 'Looking…': 'Ψάχνει…', 'Refresh': 'Ανανέωση', '{n} failing': '{n} χαλάνε', 'No drive reports a problem': 'Κανένας δίσκος δεν αναφέρει πρόβλημα',
     'Looking at the drives…': 'Κοιτάζει τους δίσκους…', 'No drives found.': 'Δεν βρέθηκαν δίσκοι.', 'Only read: nothing on a drive is changed.': 'Μόνο ανάγνωση: τίποτα δεν αλλάζει σε κανέναν δίσκο.',
   },
