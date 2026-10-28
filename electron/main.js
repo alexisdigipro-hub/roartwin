@@ -7,6 +7,8 @@ const fs = require('fs')
 const path = require('path')
 const { pathToFileURL } = require('url')
 const engine = require('./engine')
+const clean = require('./clean')
+const { execFile } = require('child_process')
 const updater = require('./updater')
 
 nativeTheme.themeSource = 'dark'
@@ -204,7 +206,53 @@ ipcMain.handle('twin:trash', async (_e, paths) => {
   }
   return { ok, failed }
 })
-const known = (p) => (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
+/* Clean up (Alex, 28 Oct): the caches of Resolve, Adobe, the apps; measured, then to the Trash only what was chosen.
+   The page sends only which places; the files are listed again here, each checked against the places (clean.allowed),
+   and a place whose program is open is left alone. */
+const places = () => clean.catalogue({ home: app.getPath('home') })
+const processes = () => new Promise((done) => {
+  const [cmd, args] = process.platform === 'win32' ? ['tasklist', ['/fo', 'csv', '/nh']] : ['ps', ['-axo', 'comm=']]
+  execFile(cmd, args, { maxBuffer: 8 << 20 }, (err, out) => done(err ? [] : String(out).split(/\r?\n/).map((l) => l.replace(/^"([^"]*)".*$/, '$1')).filter(Boolean)))
+})
+let lastClean = null
+ipcMain.handle('twin:clean-look', async (e) => {
+  if (scanning) throw new Error('A scan is already running.')
+  scanning = true; stopNow = false
+  try {
+    const items = places()
+    const open = clean.openApps(items, await processes())
+    const tick = (r) => { try { e.sender.send('twin:clean-tick', { id: r.id, size: r.size, files: r.files }) } catch { /* window gone */ } }
+    const got = await clean.measure(items, tick, () => stopNow)
+    lastClean = items.map((item, i) => ({ ...item, match: undefined, skip: undefined, ...got[i], entries: undefined, count: got[i].entries.length, open: (item.apps || []).filter((a) => open.includes(a)) }))
+    return lastClean
+  } catch (err) {
+    if (err instanceof clean.Stopped) return { stopped: true }
+    throw err
+  } finally { scanning = false }
+})
+ipcMain.handle('twin:clean', async (_e, ids) => {
+  if (scanning) throw new Error('A scan is already running.')
+  scanning = true; stopNow = false
+  const ok = [], failed = []
+  let freed = 0
+  try {
+    const items = places()
+    const open = clean.openApps(items, await processes())
+    for (const item of items.filter((i) => (Array.isArray(ids) ? ids : []).includes(i.id))) {
+      const busy = (item.apps || []).filter((a) => open.includes(a))
+      if (busy.length) { failed.push({ id: item.id, apps: busy, error: `Close ${busy.join(', ')} first.` }); continue }
+      for (const en of await clean.entriesOf(item)) {
+        if (stopNow) break
+        if (!clean.allowed(items, en.path)) continue
+        try { await shell.trashItem(en.path); ok.push(en.path); freed += en.size } catch (err) { failed.push({ id: item.id, path: en.path, error: String(err?.message || err) }) }
+      }
+    }
+  } finally { scanning = false }
+  return { ok: ok.length, freed, failed }
+})
+
+const known = (p) => (lastClean || []).some((c) => (c.found || []).includes(p))
+  || (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
   || !!lastCopy && [...lastCopy.reports, ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
 ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemInFolder(String(p)) })

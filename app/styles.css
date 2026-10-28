@@ -203,3 +203,13 @@ main { flex: 1; min-height: 0; overflow: auto; }
 .modes + .modes { margin-top: -6px; }
 @media (max-width: 760px) { .nf-row { grid-template-columns: 1fr 1fr; } }
 a.chip { text-decoration: none; } a.chip:hover { color: var(--text); }
+/* Clean up (Alex, 28 Oct): one tile a place, its size, Show in Finder and the switch; the chosen as lighter glass */
+.cl-list { gap: 6px; padding: 8px; }
+.opt.cl { padding: 10px 12px; border-radius: 16px; background: rgba(0,0,0,.18); border: 1px solid transparent; transition: background .2s, border-color .2s; }
+.opt.cl.on { background: var(--glass-2); border-color: var(--edge); }
+.opt.cl.none { opacity: .55; }
+.opt.cl > span:first-child { display: grid; gap: 2px; justify-items: start; }
+.cl-size { font-variant-numeric: tabular-nums; color: var(--text); }
+.cl-go { gap: 10px; flex-wrap: wrap; }
+.opt.cl > .cl-size { flex: none; }
+.switch:disabled { opacity: .4; cursor: default; }

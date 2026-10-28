@@ -49,6 +49,12 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
 - **Light on the computer:** each ffmpeg decodes on one core at a low priority, as many side by side as half the cores
   (2 to 4); JPEGs are read at an eighth of their size for their fingerprint, video previews come from the nearest key
   frame. The same results with about half the processor of before.
+- **Clean up** (Alex, 28 Oct): Measure shows how much each program's cache holds: DaVinci Resolve (CacheClip, logs),
+  the Adobe media cache (Premiere Pro, After Effects, Media Encoder, Audition), Adobe Team Projects, the After Effects
+  disk cache, Cinema 4D and Redshift, every other app's cache, logs, old iPhone/iPad updates, Xcode build files and
+  installers left in Downloads (off at first). A switch per place; the chosen go to the Trash. Only those fixed places
+  (`electron/clean.js`), only what is inside them (the folder stays), links never followed, and a place whose program
+  is open is left alone (Close … first). Windows: Resolve, Adobe, After Effects, Temp, installers.
 - **Language:** English by default; Ελληνικά under Language (every text of the page, kept per computer).
 - **The one to keep:** for exact copies the oldest; for the same video the biggest picture, then the most data.
 
@@ -59,6 +65,7 @@ to choose. The list can be saved as CSV.
 
 ## Layout
 - `electron/engine.js`: the scan (plain Node). `test/engine.test.js` runs it on real videos made with ffmpeg.
+- `electron/clean.js`: Clean up's places, measured and checked (plain Node). `test/clean.test.js` runs it on a made-up home folder.
 - `electron/main.js`, `preload.js`: the window, folders, Trash, Finder/Explorer. `updater.js`: updates from the releases.
 - `app/`: the page (no build step). Opened in a browser, `app/demo.js` stands in for the disk.
 

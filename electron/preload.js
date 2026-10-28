@@ -1,4 +1,4 @@
-// What RoarTwin's page may ask of the Mac/Windows app: folders, a scan, the Trash, Finder/Explorer, updates.
+// What RoarTwin's page may ask of the Mac/Windows app: folders, a scan, the Trash, Finder/Explorer, updates, Clean up.
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const on = (channel) => (fn) => { const h = (_e, v) => fn(v); ipcRenderer.on(channel, h); return () => ipcRenderer.removeListener(channel, h) }
@@ -22,6 +22,10 @@ contextBridge.exposeInMainWorld('twin', {
   open: (p) => ipcRenderer.invoke('twin:open', String(p)),
   exportCSV: (text) => ipcRenderer.invoke('twin:export', String(text)),
   onMenu: on('twin:menu'),
+  // Clean up (Alex, 28 Oct): the caches measured, and the places chosen moved to the Trash
+  cleanLook: () => ipcRenderer.invoke('twin:clean-look'),
+  clean: (ids) => ipcRenderer.invoke('twin:clean', [...ids].map(String)),
+  onCleanTick: on('twin:clean-tick'),
   update: {
     state: () => ipcRenderer.invoke('twin:update-state'),
     check: () => ipcRenderer.invoke('twin:update-check'),
