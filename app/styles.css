@@ -20,11 +20,11 @@ button { cursor: pointer; }
 .side { height: 100%; display: flex; flex-direction: column; gap: 6px; padding: 0 10px 12px; border-right: 1px solid var(--line); background: rgba(0,0,0,.14); overflow: hidden; }
 .side .wm { flex: none; height: 58px; display: flex; align-items: center; padding-left: 8px; -webkit-app-region: drag; }
 html.mac .side .wm { padding-left: 80px; }
-.side-list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 14px; padding-top: 4px; scrollbar-width: none; }
+.side-list { flex: 1; min-height: 0; overflow: auto; display: grid; align-content: start; gap: 8px; padding-top: 0; scrollbar-width: none; }
 .side-list::-webkit-scrollbar { display: none; }
 .side-g { display: grid; gap: 2px; }
-.side-g small { padding: 0 10px 4px; color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
-.nav { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--muted); text-align: left; font-weight: 500; transition: background .2s, color .2s, border-color .2s; }
+.side-g small { padding: 0 10px 2px; color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.nav { display: flex; align-items: center; gap: 10px; height: 31px; padding: 0 10px; border: 1px solid transparent; border-radius: 12px; background: none; color: var(--muted); text-align: left; font-weight: 500; transition: background .2s, color .2s, border-color .2s; }
 .nav span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .nav svg { width: 17px; height: 17px; flex: none; }
 .nav:hover:not(:disabled) { background: var(--glass); color: var(--text); }
