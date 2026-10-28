@@ -652,7 +652,8 @@ async function backupCheck(opts, tick = () => {}, stop = () => false) {
    way. Each file is written under a temporary name and only takes its own name once whole, with the card's dates. Then
    every copy is read back from its drive and its SHA-256 compared with the card's: the same, or it is reported. Nothing
    is ever written over: a file already there with the same bytes counts as copied, one with other bytes is reported
-   and left alone. Each copy gets a report (CSV: every file, its size, its SHA-256, the result). */
+   and left alone. Each copy gets a report (CSV: every file, its size, its SHA-256, the result), and an ASC MHL v1.1
+   hash list (Alex, 28 Oct: the file post houses and insurers ask for; its MD5 is worked out in the same read). */
 const PART = '.roartwin-part'
 const stamp = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}-${String(d.getMinutes()).padStart(2, '0')}`
 async function hashFile(p, onBytes, stop) { return fullHash({ path: p }, onBytes, stop) }
@@ -677,7 +678,7 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
     } catch (e) { if (e.room) throw e }
   }
   const dests = targets.map((t) => path.join(t, name))
-  const rows = new Map(files.map((f) => [f, { file: f, rel: path.relative(source, f.path), hash: '', results: dests.map(() => '') }]))
+  const rows = new Map(files.map((f) => [f, { file: f, rel: path.relative(source, f.path), hash: '', md5: '', hashedAt: '', results: dests.map(() => '') }]))
   const failed = []
   const fail = (f, i, error) => { rows.get(f).results[i] = 'failed'; failed.push({ path: f.path, name: f.name, target: dests[i], error }) }
   let bytesDone = 0, last = 0
@@ -697,15 +698,16 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
       } catch (e) { fail(f, i, String(e?.message || e)) }
     }
     const h = crypto.createHash('sha256')
+    const h5 = crypto.createHash('md5')
     try {
       const rs = fs.createReadStream(f.path, { highWaterMark: 4 * 1024 * 1024 })
       for await (const chunk of rs) {
         if (stop()) { rs.destroy(); throw new Stopped() }
-        h.update(chunk)
+        h.update(chunk); h5.update(chunk)
         await Promise.all(outs.filter((o) => !o.err).map((o) => o.fh.write(chunk).catch((e) => { o.err = e })))
         bytesDone += chunk.length; report('copy')
       }
-      row.hash = h.digest('hex')
+      row.hash = h.digest('hex'); row.md5 = h5.digest('hex'); row.hashedAt = new Date().toISOString().replace(/\.\d+Z$/, 'Z')
     } catch (e) {
       for (const o of outs) { await o.fh.close().catch(() => {}); await fsp.rm(o.tmp, { force: true }) }
       if (e instanceof Stopped) throw e
@@ -738,22 +740,38 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
   }
   // the report, in each copy
   const when = stamp()
-  const reports = []
+  const reports = [], mhl = []
+  const ok = (r) => r === 'verified' || r === 'already there'
   const q = (x) => `"${String(x ?? '').replace(/"/g, '""')}"`
   for (let i = 0; i < dests.length; i++) {
     const lines = [['File', 'Size (bytes)', 'SHA-256', 'Result'].map(q).join(',')]
     for (const row of rows.values()) lines.push([row.rel, row.file.size, row.hash, row.results[i] || 'failed'].map(q).join(','))
     const rp = path.join(dests[i], `_RoarTwin copy report ${when}.csv`)
     try { await fsp.mkdir(dests[i], { recursive: true }); await fsp.writeFile(rp, '﻿' + lines.join('\r\n'), 'utf8'); reports.push(rp) } catch { /* the drive went away: the failures say so */ }
+    // the MHL: only the files that are right on this drive
+    const mp = path.join(dests[i], `_RoarTwin copy ${when}.mhl`)
+    try { await fsp.writeFile(mp, mhlOf([...rows.values()].filter((r) => r.md5 && ok(r.results[i])), opts.version), 'utf8'); mhl.push(mp) } catch { /* as above */ }
   }
-  const ok = (r) => r === 'verified' || r === 'already there'
   const all = [...rows.values()]
   return {
-    mode: 'twin', source, targets: dests, reports, total: files.length, bytes: bytesTotal,
+    mode: 'twin', source, targets: dests, reports, mhl, total: files.length, bytes: bytesTotal,
     verified: all.filter((r) => r.results.every(ok)).length,
     already: all.filter((r) => r.results.some((x) => x === 'already there')).length,
     failed, took: Date.now() - t0,
   }
+}
+
+/* ASC MHL v1.1: one <hash> a file, its path inside the copy (forward slashes), size, date, MD5 */
+const xml = (x) => String(x ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+const isoS = (ms) => new Date(ms).toISOString().replace(/\.\d+Z$/, 'Z')
+function mhlOf(rows, version = '') {
+  const now = isoS(Date.now())
+  return ['<?xml version="1.0" encoding="UTF-8"?>', '<hashlist version="1.1">',
+    '  <creatorinfo>', `    <name>${xml((() => { try { return os.userInfo().username } catch { return '' } })())}</name>`, `    <hostname>${xml(os.hostname())}</hostname>`,
+    `    <tool>RoarTwin${version ? ' ' + xml(version) : ''}</tool>`, `    <startdate>${now}</startdate>`, `    <finishdate>${now}</finishdate>`, '  </creatorinfo>',
+    ...rows.map((r) => ['  <hash>', `    <file>${xml(r.rel.split(path.sep).join('/'))}</file>`, `    <size>${r.file.size}</size>`,
+      `    <lastmodificationdate>${isoS(r.file.mtime)}</lastmodificationdate>`, `    <md5>${r.md5}</md5>`, `    <hashdate>${r.hashedAt}</hashdate>`, '  </hash>'].join('\n')),
+    '</hashlist>', ''].join('\n')
 }
 
 /* ---------- a drive checked again against its copy report, months later ---------- */

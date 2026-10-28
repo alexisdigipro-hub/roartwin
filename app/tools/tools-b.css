@@ -1,0 +1,10 @@
+/* Media report, Clip check, Contact sheet (Alex, 28 Oct) */
+.cc-log { margin: 6px 0 0; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.28); color: var(--muted); font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; white-space: pre-wrap; word-break: break-all; }
+.cs-grid { display: grid; grid-template-columns: repeat(var(--cols, 4), minmax(0, 1fr)); gap: 12px; }
+.cs-t { margin: 0; padding: 8px; border-radius: 16px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); min-width: 0; }
+.cs-fr { display: grid; grid-template-columns: repeat(var(--n, 1), minmax(0, 1fr)); gap: 3px; }
+.cs-img { aspect-ratio: 16 / 9; border-radius: 9px; background: #0c0d10 center / cover no-repeat; border: 1px solid var(--line); }
+.cs-t figcaption { display: grid; gap: 1px; padding: 7px 4px 2px; min-width: 0; }
+.cs-t figcaption b { font-size: 12.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cs-t figcaption small { color: var(--muted); font-size: 11.5px; font-variant-numeric: tabular-nums; }
+@media (max-width: 1040px) { .cs-grid { grid-template-columns: repeat(min(var(--cols, 4), 3), minmax(0, 1fr)); } }

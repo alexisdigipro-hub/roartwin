@@ -4,6 +4,7 @@ const assert = require('assert')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
+const crypto = require('crypto')
 const { execFileSync } = require('child_process')
 const { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, parseProbe, parseAudio, Stopped } = require('../electron/engine')
 
@@ -174,6 +175,19 @@ async function more() {
     assert.strictEqual(tw.verified, 4); assert.strictEqual(tw.already, 1)
     assert.ok(fs.existsSync(at2('driveA/card/empty.txt')), 'empty files come too')
     assert.strictEqual(tw.reports.length, 2); assert.ok(fs.readFileSync(tw.reports[0], 'utf8').includes('verified'))
+    // the MHL beside each report: every file right on that drive, its MD5 the file's own
+    assert.strictEqual(tw.mhl.length, 2)
+    const mhl = fs.readFileSync(tw.mhl[0], 'utf8')
+    assert.ok(/^<\?xml[^>]*\?>\s*<hashlist version="1\.1">/.test(mhl) && mhl.trim().endsWith('</hashlist>'), 'an MHL v1.1 document')
+    const hashes = [...mhl.matchAll(/<hash>\s*<file>([^<]*)<\/file>\s*<size>(\d+)<\/size>\s*<lastmodificationdate>[^<]+<\/lastmodificationdate>\s*<md5>([0-9a-f]{32})<\/md5>\s*<hashdate>[^<]+<\/hashdate>\s*<\/hash>/g)]
+    assert.strictEqual(hashes.length, 5, 'every file of driveA')
+    for (const [, rel, size, md5] of hashes) {
+      const f = at2('driveA/card', ...rel.split('/'))
+      assert.strictEqual(+size, fs.statSync(f).size)
+      assert.strictEqual(md5, crypto.createHash('md5').update(fs.readFileSync(f)).digest('hex'), rel + ' MD5')
+    }
+    assert.ok(hashes.some(([, rel]) => rel === 'sub/C.wav'), 'paths inside the copy, forward slashes')
+    assert.strictEqual([...fs.readFileSync(tw.mhl[1], 'utf8').matchAll(/<hash>/g)].length, 4, 'driveB leaves out the file it could not take')
     const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(path.join(d, e.name)) : [e.name])
     assert.ok(!walk(at2('driveA')).some((n) => n.endsWith('.roartwin-part')), 'no half copies')
     await assert.rejects(makeTwin({ source: at2('card'), targets: [at2('card/sub')] }), /inside/)
