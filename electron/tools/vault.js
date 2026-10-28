@@ -167,7 +167,8 @@ function register(ctx) {
     powerMonitor.on('lock-screen', lock)
   })
   app.on('before-quit', lock)
-  app.on('browser-window-created', (_e, w) => w.on('closed', lock))
+  // the app's own window closing (not the hidden one a PDF is printed in: destroy() fires no 'close')
+  app.on('browser-window-created', (_e, w) => w.on('close', () => { if (w === ctx.win()) lock() }))
 
   ctx.handle('vault-state', () => ({ exists: fs.existsSync(FILE()), unlocked: !!v, idle: idleMin, count: v ? v.data.entries.length : 0 }))
   ctx.handle('vault-create', async ({ password }) => {
@@ -221,7 +222,7 @@ function register(ctx) {
     const cur = need()
     let buf
     try { buf = fs.readFileSync(FILE()) } catch { throw new Error('There is no vault yet.') }
-    await open(buf, String(old || '')) // the old password, asked again
+    ;(await open(buf, String(old || ''))).key.fill(0) // the old password, asked again
     if (String(password || '').length < 8) throw new Error('At least 8 characters.')
     const s = await seal(cur.data, password)
     writeAtomic(FILE(), s.buf)

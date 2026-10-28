@@ -87,6 +87,7 @@ const errorLines = (log) => [...new Set(String(log || '').split(/\r?\n/).map((l)
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c])
 const hms = (s) => { if (s == null) return ''; s = Math.round(s); const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60; return (h ? h + ':' + String(m).padStart(2, '0') : m) + ':' + String(x).padStart(2, '0') }
 const size = (n) => { if (!n) return ''; const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++ } return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i] }
+const audioName = (c) => (c.audio?.[0]?.codec || '').replace(/^pcm_.*/, 'PCM').toUpperCase()
 const W = (words, k, d) => esc((words && words[k]) || d)
 const PAGE_CSS = `*{box-sizing:border-box}body{margin:0;font:9.5px/1.35 -apple-system,'Helvetica Neue',Arial,sans-serif;color:#16181d;-webkit-print-color-adjust:exact}
 .pg{padding:14mm 12mm}h1{margin:0;font-size:20px;font-weight:300}h1 b{font-weight:800}.sub{color:#666;margin:4px 0 10px;word-break:break-all}
@@ -98,13 +99,13 @@ td{padding:4px;border-bottom:1px solid #eee;vertical-align:middle}tr{page-break-
 function reportHTML(r, words = {}) {
   const clips = r.clips || []
   const total = clips.reduce((n, c) => n + (c.dur || 0), 0), bytes = clips.reduce((n, c) => n + (c.size || 0), 0)
-  const codecs = [...new Set(clips.map((c) => c.video?.name || c.audio?.[0]?.codec?.toUpperCase()).filter(Boolean))]
+  const codecs = [...new Set(clips.map((c) => c.video?.name || audioName(c)).filter(Boolean))]
   const rows = clips.map((c) => `<tr><td>${c.thumb ? `<img src="${esc(c.thumb)}">` : ''}</td><td><div class="nm">${esc(c.name)}</div><div class="dir">${esc(c.dir)}</div></td>
-<td>${esc(hms(c.dur))}</td><td>${esc(c.tc)}</td><td>${esc(c.video ? c.video.name : (c.audio[0]?.codec || '').toUpperCase())}</td><td>${c.video ? `${c.video.w}×${c.video.h}` : ''}</td>
+<td>${esc(hms(c.dur))}</td><td>${esc(c.tc)}</td><td>${esc(c.video ? c.video.name : audioName(c))}</td><td>${c.video ? `${c.video.w}×${c.video.h}` : ''}</td>
 <td>${c.video?.fps ? esc(Math.round(c.video.fps * 1000) / 1000) : ''}</td><td>${c.audio.length ? esc(c.audio.map((a) => `${a.channels || a.layout} ch · ${Math.round(a.rate / 100) / 10} kHz`).join(', ')) : ''}</td>
 <td>${esc(size(c.size))}</td><td>${esc(c.date || '')}</td></tr>`).join('\n')
   return `<!doctype html><html><head><meta charset="utf-8"><style>${PAGE_CSS}</style></head><body><div class="pg">
-<h1>${W(words, 'title', 'Media')} <b>${W(words, 'report', 'report')}</b></h1><div class="sub">${esc(r.root)} · ${esc(new Date(r.at || Date.now()).toLocaleString('en-GB'))}</div>
+<h1><b>${W(words, 'title', 'Media report')}</b></h1><div class="sub">${esc(r.root)} · ${esc(new Date(r.at || Date.now()).toLocaleString('en-GB'))}</div>
 <div class="tot"><span>${clips.length} ${W(words, 'clips', 'clips')}</span><span>${esc(hms(total))}</span><span>${esc(size(bytes))}</span>${codecs.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
 <table><thead><tr><th></th><th>${W(words, 'name', 'Name')}</th><th>${W(words, 'length', 'Length')}</th><th>${W(words, 'tc', 'Timecode')}</th><th>${W(words, 'codec', 'Codec')}</th><th>${W(words, 'picture', 'Picture')}</th><th>fps</th><th>${W(words, 'sound', 'Sound')}</th><th>${W(words, 'size', 'Size')}</th><th>${W(words, 'date', 'Date')}</th></tr></thead>
 <tbody>${rows}</tbody></table><div class="foot">RoarTwin · The Mad Lions Lab</div></div></body></html>`
@@ -117,7 +118,7 @@ function contactHTML(sheet, { cols = 4, words = {} } = {}) {
   return `<!doctype html><html><head><meta charset="utf-8"><style>${PAGE_CSS}
 .grid{display:grid;grid-template-columns:repeat(${n},1fr);gap:8px}.t{page-break-inside:avoid}.fr{display:grid;gap:2px}.fr img,.no{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:3px;display:block;background:#111}
 .t .nm{margin-top:3px;font-size:8.5px}.mt{color:#777;font-size:8px}</style></head><body><div class="pg">
-<h1>${W(words, 'title', 'Contact')} <b>${W(words, 'sheet', 'sheet')}</b></h1><div class="sub">${esc(sheet.root)} · ${(sheet.clips || []).length} ${W(words, 'clips', 'clips')}</div>
+<h1><b>${W(words, 'title', 'Contact sheet')}</b></h1><div class="sub">${esc(sheet.root)} · ${(sheet.clips || []).length} ${W(words, 'clips', 'clips')}</div>
 <div class="grid">${tiles}</div><div class="foot">RoarTwin · The Mad Lions Lab</div></div></body></html>`
 }
 

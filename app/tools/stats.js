@@ -9,13 +9,15 @@ const pct = (x) => (x == null ? '–' : Math.round(x) + '%')
 const rate = (ctx, b) => (b == null ? '–' : ctx.bytes(Math.round(b)) + '/s')
 const mbps = (x) => (x == null ? '–' : (x >= 100 ? Math.round(x) : x >= 10 ? x.toFixed(1) : x.toFixed(2)) + ' Mbps')
 const upFor = (s) => { const d = Math.floor(s / 86400), h = Math.floor((s % 86400) / 3600), m = Math.floor((s % 3600) / 60); return (d ? d + 'd ' : '') + (d || h ? h + 'h ' : '') + m + 'm' }
+/* memory as the computer itself counts it (64 GB, not 68.7): in 1024s; drives stay in 1000s, as Finder shows them */
+const ram = (b) => { if (b == null) return '–'; const g = b / 1024 ** 3; return g >= 100 ? Math.round(g) + ' GB' : g >= 10 ? (Math.round(g * 10) / 10) + ' GB' : g >= 1 ? g.toFixed(2) + ' GB' : Math.round(b / 1024 ** 2) + ' MB' }
 const mins = (ctx, m) => (m == null ? '–' : m < 1 ? ctx.t('under a minute') : m < 90 ? ctx.t('about {n} min', { n: Math.round(m) }) : ctx.t('about {n} h', { n: (m / 60).toFixed(1) }))
 
 /* a small line graph of the last minute, 0..max */
 function spark(values, max, cls = '') {
   const w = 240, hgt = 44, v = values.length ? values : [0]
   const top = Math.max(max || 0, ...v, 1e-9)
-  const pts = v.map((x, i) => [v.length === 1 ? w : (i / (KEEP - 1)) * w + (w - ((v.length - 1) / (KEEP - 1)) * w), hgt - 2 - ((x || 0) / top) * (hgt - 6)])
+  const pts = v.map((x, i) => [v.length === 1 ? w : (i / (v.length - 1)) * w, hgt - 2 - ((x || 0) / top) * (hgt - 6)])
   const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ')
   const area = line + ` L${pts[pts.length - 1][0].toFixed(1)} ${hgt} L${pts[0][0].toFixed(1)} ${hgt} Z`
   return `<svg class="spark ${cls}" viewBox="0 0 ${w} ${hgt}" preserveAspectRatio="none" aria-hidden="true"><path class="a" d="${area}"/><path class="l" d="${line}"/></svg>`
@@ -44,7 +46,7 @@ function tiles(ctx) {
     h('div', { class: 'st-sub' }, [m.chip, m.os].filter(Boolean).join(' · ')),
     h('div', { class: 'st-rows' },
       row(h, t('Cores'), m.perf ? t('{a} ({p} performance, {e} efficiency)', { a: m.cores, p: m.perf, e: m.eff }) : String(m.cores || cores || '–')),
-      row(h, t('Memory'), bytes(m.memory || n.mem.total)),
+      row(h, t('Memory'), ram(m.memory || n.mem.total)),
       row(h, t('On for'), upFor(n.uptime || 0)),
       n.net.ip ? row(h, t('Local address'), n.net.ip) : null))
   // the processor
@@ -58,12 +60,12 @@ function tiles(ctx) {
   const p = PRESSURE[n.mem.pressure]
   const mem = h('section', { class: 'st-tile' },
     h('div', { class: 'st-k' }, t('Memory')),
-    h('div', { class: 'st-big' }, bytes(n.mem.used), h('small', {}, ' / ' + bytes(n.mem.total))),
+    h('div', { class: 'st-big' }, ram(n.mem.used), h('small', {}, ' / ' + ram(n.mem.total))),
     bar(h, n.mem.used / n.mem.total, p ? p[1] : null),
     h('div', { class: 'st-chips' },
       p ? chip(h, t(p[0]), p[1]) : null,
-      n.mem.swap ? h('span', { class: 'chip' }, t('Swap {a}', { a: bytes(n.mem.swap.used) })) : null,
-      n.mem.cached != null ? h('span', { class: 'chip' }, t('Cached {a}', { a: bytes(n.mem.cached) })) : null))
+      n.mem.swap ? h('span', { class: 'chip' }, t('Swap {a}', { a: ram(n.mem.swap.used) })) : null,
+      n.mem.cached != null ? h('span', { class: 'chip' }, t('Cached {a}', { a: ram(n.mem.cached) })) : null))
   // the network, now
   const r = n.net.rate
   const net = h('section', { class: 'st-tile' },
@@ -119,7 +121,7 @@ function tiles(ctx) {
       : h('div', { class: 'st-sub' }, nr))
   // the heaviest programs
   const procs = (list, kind) => h('ol', { class: 'st-procs' }, ...list.map((x) => h('li', {},
-    h('span', { title: x.name }, x.name + (x.count > 1 ? ` ×${x.count}` : '')), h('b', {}, kind === 'cpu' ? x.cpu.toFixed(1) + '%' : bytes(x.mem)))))
+    h('span', { title: x.name }, x.name + (x.count > 1 ? ` ×${x.count}` : '')), h('b', {}, kind === 'cpu' ? x.cpu.toFixed(1) + '%' : ram(x.mem)))))
   const top = h('section', { class: 'st-tile st-wide' },
     h('div', { class: 'st-k' }, t('Heaviest programs')),
     n.top?.cpu?.length ? h('div', { class: 'st-two' },

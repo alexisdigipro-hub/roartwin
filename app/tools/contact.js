@@ -19,7 +19,7 @@ async function start(ctx) {
 }
 async function savePDF(ctx) {
   const t = ctx.t
-  try { if (await ctx.call('contact-pdf', { cols: st.cols, landscape: st.landscape, words: { title: t('Contact'), sheet: t('sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
+  try { if (await ctx.call('contact-pdf', { cols: st.cols, landscape: st.landscape, words: { title: t('Contact sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 
 export default {
@@ -31,7 +31,7 @@ export default {
     'Frames': 'Καρέ', 'One or three frames of each clip.': 'Ένα ή τρία καρέ από κάθε clip.', 'One': 'Ένα', 'Three': 'Τρία',
     'Columns': 'Στήλες', 'How many clips across the page.': 'Πόσα clips σε κάθε σειρά.', 'Page': 'Σελίδα', 'Landscape': 'Οριζόντια', 'Portrait': 'Κάθετη', 'How the PDF is turned.': 'Πώς γυρίζει το PDF.',
     'Make the sheet': 'Φτιάξε το sheet', 'Taking the frames': 'Παίρνει τα καρέ', 'Nothing is changed: RoarTwin only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει τα clips.',
-    'Save PDF': 'Αποθήκευση PDF', 'New sheet': 'Νέο sheet', '{n} clips': '{n} clips', 'Contact': 'Contact', 'sheet': 'sheet',
+    'Save PDF': 'Αποθήκευση PDF', 'New sheet': 'Νέο sheet', '{n} clips': '{n} clips',
   },
   top(ctx) {
     const { h, t, ico, seg } = ctx

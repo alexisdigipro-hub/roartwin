@@ -1,0 +1,43 @@
+/* Computer stats (Alex, 28 Oct): soft tiles in a grid, big thin numbers, small graphs of the last minute */
+.st-grid { padding: 18px 20px 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-content: start; }
+.st-tile { min-width: 0; display: grid; gap: 10px; align-content: start; padding: 18px; border-radius: 22px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); }
+.st-wide { grid-column: 1 / -1; }
+.st-wait { grid-column: 1 / -1; min-height: 160px; place-items: center; }
+.st-k { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.st-big { font-size: 40px; line-height: 1.05; font-weight: 200; letter-spacing: -.01em; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.st-big small { font-size: 16px; color: var(--muted); font-weight: 400; }
+.st-name { font-size: 24px; font-weight: 300; line-height: 1.1; }
+.st-sub { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; }
+.st-fine { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.st-rows { display: grid; gap: 6px; }
+.st-row { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; min-width: 0; }
+.st-row span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-row b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.st-bar { height: 8px; border-radius: 999px; background: rgba(0,0,0,.3); overflow: hidden; }
+.st-bar i { display: block; height: 100%; border-radius: inherit; background: var(--ok); transition: width .6s var(--ease); }
+.spark { display: block; width: 100%; height: 44px; }
+.spark .l { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.spark.acc .l { stroke: var(--acc); } .spark.acc .a { fill: color-mix(in srgb, var(--acc) 16%, transparent); }
+.spark.ok .l { stroke: var(--ok); } .spark.ok .a { fill: color-mix(in srgb, var(--ok) 14%, transparent); }
+.spark.up .l { stroke: #64d2ff; } .spark.up .a { fill: color-mix(in srgb, #64d2ff 12%, transparent); }
+.st-sparks { display: grid; gap: 4px; }
+.st-sparks .spark { height: 32px; }
+.st-cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(10px, 1fr)); gap: 3px; height: 26px; }
+.st-cores i { border-radius: 4px; background: linear-gradient(to top, var(--acc) calc(var(--v) * 100%), rgba(255,255,255,.07) calc(var(--v) * 100%)); }
+.st-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
+.st-pair > div { display: grid; gap: 2px; }
+.st-pair small { color: var(--muted); font-size: 12px; }
+.st-pair b { font-size: 22px; font-weight: 300; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.st-net .st-big { color: var(--text); }
+.st-verdict { margin: 0; font-size: 14px; }
+.st-live, .st-result { display: grid; gap: 8px; }
+.st-drives { display: grid; gap: 10px; }
+.st-drive { display: grid; gap: 5px; }
+.st-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.st-two small { color: var(--muted); font-size: 12px; }
+.st-procs { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
+.st-procs li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 12px; background: rgba(0,0,0,.18); font-size: 13px; min-width: 0; }
+.st-procs li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.st-procs li b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 760px) { .st-two { grid-template-columns: 1fr; } }

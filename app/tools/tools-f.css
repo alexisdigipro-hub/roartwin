@@ -46,3 +46,5 @@ textarea.vt-in { height: auto; padding: 10px 16px; border-radius: 18px; resize: 
   .vt-item .f-act { grid-column: 3; flex-wrap: wrap; }
   .vt-av { width: 34px; height: 34px; }
 }
+.btn.vt-pwbtn { border-color: color-mix(in srgb, var(--acc) 45%, transparent); background: color-mix(in srgb, var(--acc) 14%, var(--glass)); }
+.btn.vt-pwbtn:hover { background: color-mix(in srgb, var(--acc) 24%, var(--glass)); }

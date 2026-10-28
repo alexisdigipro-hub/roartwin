@@ -105,7 +105,7 @@ async function editEntry(ctx, e = {}) {
     notes: h('textarea', { class: 'vt-in vt-notes', rows: '3' }, e.notes || ''),
   }
   const tags = h('datalist', { id: 'vt-tags' }, ...[...new Set([...TAGS, ...V.list.map((x) => x.tag).filter(Boolean)])].map((x) => h('option', { value: x })))
-  const eye = h('button', { class: 'ib sm', type: 'button', title: t('Show'), html: ctx.I.search, onclick: () => { f.password.type = f.password.type === 'password' ? 'text' : 'password' } })
+  const eye = h('button', { class: 'ib sm', type: 'button', title: t('Show'), html: EYE, onclick: () => { f.password.type = f.password.type === 'password' ? 'text' : 'password' } })
   const gen = h('button', { class: 'ib sm', type: 'button', title: t('Make one'), html: ctx.I.plus, onclick: async () => { f.password.value = await ctx.call('vault-generate', { length: 20 }); f.password.type = 'text'; f.password.dispatchEvent(new Event('input')) } })
   const pw = h('div', { class: 'vt-row' }, f.password, eye, gen)
   const ok = await win(ctx, e.id ? t('Edit') : t('New entry'), [
@@ -184,7 +184,7 @@ function viewOpen(ctx) {
         V.shown[e.id] != null ? h('span', { class: 'chip vt-pw' }, V.shown[e.id] || t('(empty)')) : null)),
     h('div', { class: 'f-act' },
       e.username ? h('button', { class: 'btn vt-sm', onclick: () => copy(e, 'username') }, t('Username')) : null,
-      e.hasPassword ? h('button', { class: 'btn vt-sm main', onclick: () => copy(e, 'password') }, t('Password')) : null,
+      e.hasPassword ? h('button', { class: 'btn vt-sm vt-pwbtn', onclick: () => copy(e, 'password') }, t('Password')) : null,
       e.hasPassword ? h('button', { class: 'ib sm', title: V.shown[e.id] != null ? t('Hide') : t('Show'), 'aria-label': t('Show'), html: V.shown[e.id] != null ? ctx.I.x : EYE, onclick: () => reveal(e) }) : null,
       h('button', { class: 'ib sm', title: t('Edit'), 'aria-label': t('Edit'), html: ctx.I.rename, onclick: () => editEntry(ctx, e) }),
       h('button', { class: 'ib sm vt-del', title: t('Delete'), 'aria-label': t('Delete'), html: ctx.I.trash, onclick: () => del(e) })))

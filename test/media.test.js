@@ -80,7 +80,7 @@ const LOG = `Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'A001_C003.mov':
   assert.ok(frame.startsWith('data:image/jpeg;base64,'))
 
   // the pages that become PDFs
-  const html = media.reportHTML({ root: at('CARD'), clips: [pro, wav], at: Date.now() }, { title: 'Αναφορά', report: 'media' })
+  const html = media.reportHTML({ root: at('CARD'), clips: [pro, wav], at: Date.now() }, { title: 'Αναφορά media' })
   assert.ok(html.includes('A001_C001.mov') && html.includes('T001.wav') && html.includes('ProRes 422 HQ') && html.includes('01:00:00:00'))
   assert.ok(html.includes('Αναφορά'))
   assert.strictEqual((html.match(/<tr>/g) || []).length, 3, 'a header row and a row a clip')

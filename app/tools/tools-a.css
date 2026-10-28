@@ -1,0 +1,39 @@
+/* Space map and Project leftovers (Alex, 28 Oct): soft rows inside glass tiles, a size bar, the chosen as lighter glass */
+.sp { padding-bottom: 120px; }
+.sp-stack { display: grid; gap: 12px; }
+.sp-crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.sp-crumbs .chip { cursor: pointer; } .sp-crumbs .chip:disabled { cursor: default; }
+.sp-crumbs .chip:not(:disabled):hover { color: var(--text); background: var(--glass-2); }
+.sp-crumbs .spacer { flex: 1; }
+.sp-sep { color: var(--dim); }
+.sp-list { display: grid; gap: 6px; padding: 8px; }
+.sp-head { display: flex; align-items: baseline; gap: 10px; padding: 6px 8px 2px; }
+.sp-head small { color: var(--muted); }
+.sp-dir, .sp-file { display: grid; align-items: center; gap: 12px; min-height: 48px; padding: 7px 10px; border-radius: 16px; background: rgba(0,0,0,.18); border: 1px solid transparent; transition: background .2s, border-color .2s; text-align: left; }
+.sp-dir { grid-template-columns: 22px minmax(0, 1.2fr) minmax(80px, 1fr) auto; width: 100%; color: inherit; }
+button.sp-dir:hover { background: var(--glass-2); border-color: var(--edge); }
+.sp-kind { grid-template-columns: 120px minmax(0, .6fr) minmax(80px, 1fr) auto; }
+.sp-kind .chip { justify-self: start; }
+.sp-file { grid-template-columns: auto 22px minmax(0, 1fr) auto auto; }
+.sp-file.sel { background: color-mix(in srgb, var(--acc) 9%, rgba(0,0,0,.18)); border-color: color-mix(in srgb, var(--acc) 30%, transparent); }
+.sp-file.recent { opacity: .62; }
+.sp-ic { display: grid; place-items: center; color: var(--muted); }
+.sp-ic svg { width: 18px; height: 18px; }
+.sp-name { min-width: 0; display: grid; gap: 2px; }
+.sp-name b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sp-name small { color: var(--muted); font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.sp-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.sp-meta .chip { height: 24px; font-size: 12px; padding: 0 10px; }
+.sp-size { color: var(--text); font-variant-numeric: tabular-nums; min-width: 72px; justify-content: center; }
+.sp-bar { position: relative; height: 8px; border-radius: 999px; background: rgba(255,255,255,.06); overflow: hidden; }
+.sp-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #ffb224)); transition: width .4s var(--ease); }
+.sp-more { padding: 6px 10px 4px; color: var(--muted); font-size: 12.5px; }
+.sp-now { max-width: min(520px, 90vw); color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; }
+.sp-foot { z-index: 20; }
+@media (max-width: 960px) {
+  .sp-dir { grid-template-columns: 22px minmax(0, 1fr) auto; }
+  .sp-dir .sp-bar { grid-column: 2 / -1; grid-row: 2; }
+  .sp-file { grid-template-columns: auto minmax(0, 1fr) auto; }
+  .sp-file .sp-ic { display: none; }
+  .sp-file .sp-meta { grid-column: 2 / -1; justify-content: flex-start; }
+}

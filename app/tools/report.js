@@ -80,7 +80,7 @@ const st = { root: '', res: null, busy: false, p: null }
 let loaded = false
 const load = (ctx) => { if (!loaded) { loaded = true; st.root = ctx.load('report', 'root', '') } }
 
-const words = (t) => ({ title: t('Media'), report: t('report'), clips: t('clips'), name: t('Name'), length: t('Length'), tc: t('Timecode'), codec: t('Codec'), picture: t('Picture'), sound: t('Sound'), size: t('Size'), date: t('Date') })
+const words = (t) => ({ title: t('Media report'), clips: t('clips'), name: t('Name'), length: t('Length'), tc: t('Timecode'), codec: t('Codec'), picture: t('Picture'), sound: t('Sound'), size: t('Size'), date: t('Date') })
 async function start(ctx) {
   if (!st.root) return
   const r = await runJob(ctx, st, 'report-scan', { root: st.root, skipHidden: ctx.S.opts.skipHidden }, 'report-progress')
@@ -127,7 +127,7 @@ export default {
     'Make the report': 'Φτιάξε την αναφορά', 'Reading the clips': 'Διαβάζει τα clips', 'Nothing is changed: RoarTwin only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει τα clips.',
     'Export': 'Εξαγωγή', 'Save PDF': 'Αποθήκευση PDF', 'New report': 'Νέα αναφορά', 'Export the list (CSV)': 'Εξαγωγή λίστας (CSV)',
     '{n} clips': '{n} clips', '1 clip': '1 clip', 'in all': 'συνολικά',
-    'Media': 'Αναφορά', 'report': 'media', 'Name': 'Όνομα', 'Folder': 'Φάκελος', 'Length': 'Διάρκεια', 'Timecode': 'Timecode', 'Codec': 'Codec', 'Picture': 'Εικόνα',
+    'Name': 'Όνομα', 'Folder': 'Φάκελος', 'Length': 'Διάρκεια', 'Timecode': 'Timecode', 'Codec': 'Codec', 'Picture': 'Εικόνα',
     'Sound': 'Ήχος', 'Size': 'Μέγεθος', 'Size (bytes)': 'Μέγεθος (bytes)', 'Date': 'Ημερομηνία', 'Colour': 'Χρώμα', 'Camera': 'Κάμερα', 'Open': 'Άνοιγμα',
   },
   top(ctx) {
