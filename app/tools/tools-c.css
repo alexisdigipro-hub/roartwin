@@ -1,0 +1,46 @@
+/* Drive health and Disk speed test (Alex, 28 Oct): soft tiles, tinted chips, a free-space bar, two gauges, the codec grid */
+.dh .g-head { padding-bottom: 6px; }
+.dh-i { width: 30px; height: 30px; display: grid; place-items: center; border-radius: 10px; background: rgba(255,255,255,.06); border: 1px solid var(--edge); color: var(--muted); }
+.dh-i svg { width: 16px; height: 16px; }
+.dh.bad { border-color: color-mix(in srgb, var(--acc) 45%, transparent); background: color-mix(in srgb, var(--acc) 7%, var(--glass)); }
+.dh-body { display: grid; gap: 12px; padding: 0 16px 14px; }
+.dh-health { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dh-health small { color: var(--muted); }
+.dh-raw { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--dim) !important; }
+.dh-space { display: grid; gap: 6px; }
+.dh-bar { height: 10px; border-radius: 999px; background: rgba(0,0,0,.3); border: 1px solid var(--line); overflow: hidden; }
+.dh-bar i { display: block; height: 100%; border-radius: 999px; background: linear-gradient(90deg, color-mix(in srgb, var(--ok) 70%, #fff 0%), var(--ok)); transition: width .4s var(--ease); }
+.dh-bar.low i { background: linear-gradient(90deg, var(--warn), var(--acc)); }
+.dh-nums { display: flex; align-items: center; gap: 8px; font-variant-numeric: tabular-nums; }
+.dh-nums span { color: var(--muted); }
+.dh-check { height: 26px; padding: 0 12px; font-size: 12.5px; }
+
+.card.sp { width: min(820px, 100%); }
+.sp-gauges { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.sp-g { position: relative; display: grid; justify-items: center; padding: 18px 16px 14px; border-radius: 22px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); transition: border-color .3s; }
+.sp-g.on { border-color: color-mix(in srgb, var(--acc) 45%, transparent); }
+.sp-g svg { width: min(240px, 100%); height: auto; }
+.sp-g path { fill: none; stroke-width: 12; stroke-linecap: round; }
+.sp-g .t { stroke: rgba(255,255,255,.08); }
+.sp-g .p { stroke: var(--acc); transition: stroke-dashoffset .35s var(--ease); }
+.sp-n { margin-top: -58px; display: grid; justify-items: center; line-height: 1.05; }
+.sp-n b { font-size: 34px; font-weight: 300; font-variant-numeric: tabular-nums; }
+.sp-n small { color: var(--muted); font-size: 12px; }
+.sp-l { margin-top: 10px; color: var(--muted); font-weight: 600; letter-spacing: .02em; }
+.sp-prog { display: grid; gap: 6px; }
+.sp-prog small { color: var(--muted); text-align: center; font-variant-numeric: tabular-nums; }
+.sp-say { margin: 0; text-align: center; font-size: 17px; font-weight: 600; }
+.sp-grid { display: grid; gap: 4px; padding: 0 8px 10px; }
+.sp-row { display: grid; grid-template-columns: minmax(130px, 1.5fr) repeat(4, minmax(0, 1fr)); gap: 4px; align-items: stretch; }
+.sp-head span { padding: 2px 8px; color: var(--dim); font-size: 11.5px; font-weight: 600; text-align: center; }
+.sp-head span:first-child, .sp-k { text-align: left; }
+.sp-k { padding: 8px 10px; font-weight: 500; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sp-c { display: flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 4px; border-radius: 12px; font-variant-numeric: tabular-nums; font-size: 12.5px; background: rgba(0,0,0,.18); }
+.sp-c small { font-size: 9px; letter-spacing: 1px; }
+.sp-c.ok { background: color-mix(in srgb, var(--ok) 15%, rgba(0,0,0,.18)); }
+.sp-c.ok small { color: var(--ok); }
+.sp-c.half { background: color-mix(in srgb, var(--warn) 14%, rgba(0,0,0,.18)); }
+.sp-c.half small { color: var(--warn); }
+.sp-c.no { color: var(--dim); }
+.sp-c.no small { color: var(--acc); }
+@media (max-width: 760px) { .sp-row { grid-template-columns: minmax(96px, 1.3fr) repeat(4, minmax(0, 1fr)); } .sp-c small { display: none; } }

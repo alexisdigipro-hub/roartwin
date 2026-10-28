@@ -1,4 +1,35 @@
-# RoarTwin
+# RoarKit (RoarTwin until 28 Oct 2026)
+
+A utility of many tools for film people, Mac and Windows (The Mad Lions Lab). A side menu, one tool a page, Settings
+(language, skip hidden and cloud folders) for all of them. Nothing is ever deleted for good: what goes, goes to the Trash.
+
+## The tools (28 Oct 2026)
+- **Space:** Space map (every folder by size, the biggest files, space by kind, large and old files, a Mac's local
+  snapshots), Clean up (below), Project leftovers (old Resolve optimized/proxy media, Premiere previews, After Effects
+  cache, Final Cut render files, by project and age), Find twins (below).
+- **Shoot:** Make a twin (now also an ASC MHL v1.1 with MD5 in every copy), Check a backup, Media report (every clip:
+  length, codec and profile, size, fps, timecode, sound; CSV and PDF), Clip check (every clip decoded in full, the broken
+  ones explained), Contact sheet (PDF), Rename clips (a rule of tokens: date, time, project, cam, card, counter, name,
+  timecode, camera, reel; preview, clashes refused, Undo).
+- **Files:** File manager (two panes, copy and move without overwriting, compare, project folder templates, favourites,
+  Media info in depth from ffmpeg and, on a Mac, mdls), Archives (open zip, rar, 7z, tar.*, iso, cab, pkg into a new
+  folder, password asked, zip-slip refused; make zip, 7z, tar.gz, tar.xz, Mac junk left out; through the system's tar).
+- **Drives:** Drive health (SMART, free space, bus, last check against a copy report), Disk speed test (write and read,
+  then which ProRes, BRAW and H.264/H.265 rates the drive can take).
+- **Computer:** Computer stats (processor per core, memory and pressure, swap, drives, network now, heat level and
+  battery, the heaviest programs, an internet speed test through Cloudflare).
+- **Private:** Vault (passwords, AES-256-GCM with a scrypt key from one master password, only on this computer, locks
+  itself, copies clear the clipboard after 30 s, generator, encrypted backup, import from browsers' CSV).
+
+The name: on screen RoarKit since 0.3.0; the app file is still RoarTwin.app for one release, because the 0.1.x updater
+only takes an app of that name. 0.3.0's updater takes any name, so the next release can be RoarKit.app (set productName,
+artifactName and the workflow's names then). Settings stay in the RoarTwin folder (main.js setPath) whatever the name.
+
+## Layout of the tools
+- `app/tools/<tool>.js`: a tool's page (`{ id, el, view(ctx), top(ctx), demo }`, see app/tools/index.js) and its
+  `tools-<x>.css`; `electron/tools/<tool>.js`: its Mac/Windows side (`register(ctx)`, `ctx.handle('<tool>-<what>')`).
+- `test/<tool>.test.js` for each; `npm test` runs them all (test/all.js), the engine's last.
+
 
 Finds the twins on a folder or a drive: the same file twice, whatever its name, and the same video in another
 file (exported again, in another size, codec or container). Mac and Windows. An experiment of The Mad Lions Lab.

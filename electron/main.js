@@ -8,10 +8,15 @@ const path = require('path')
 const { pathToFileURL } = require('url')
 const engine = require('./engine')
 const clean = require('./clean')
+const tools = require('./tools')
 const { execFile } = require('child_process')
 const updater = require('./updater')
 
 nativeTheme.themeSource = 'dark'
+/* RoarTwin is called RoarKit since 28 Oct: its settings, its Vault and everything it keeps stay in the old folder,
+   whatever the app is called, so nothing is lost when the app itself takes the new name. */
+app.setPath('userData', path.join(app.getPath('appData'), 'RoarTwin'))
+app.setName('RoarKit')
 
 // ffmpeg comes with the app (ffmpeg-static); inside a packed app it sits next to the archive, not in it
 function ffmpegPath() {
@@ -52,7 +57,7 @@ function open() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('app://twin/')) { e.preventDefault(); openOutside(url) } })
   win.on('close', (e) => {
     if (scanning && !quitting) {
-      const n = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Stop and close', 'Keep scanning'], defaultId: 1, message: 'RoarTwin is still scanning.', detail: 'Closing the window stops the scan.' })
+      const n = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Stop and close', 'Keep scanning'], defaultId: 1, message: 'RoarKit is still working.', detail: 'Closing the window stops it.' })
       if (n === 1) { e.preventDefault(); return }
       stopNow = true
     }
@@ -126,7 +131,7 @@ ipcMain.handle('twin:copy', async (e, opts) => {
   let lastTick = 0
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
-    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false }, tick, () => stopNow)
+    lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false, version: app.getVersion() }, tick, () => stopNow)
     return lastCopy
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -251,10 +256,57 @@ ipcMain.handle('twin:clean', async (_e, ids) => {
   return { ok: ok.length, freed, failed }
 })
 
-const known = (p) => (lastClean || []).some((c) => (c.found || []).includes(p))
+/* The other tools (Alex, 28 Oct: "one app, a utility of many tools"): each in electron/tools/<name>.js, given what it
+   needs here. One job at a time across every tool (the same lock as a scan), the Stop button stops any of them, and
+   only paths a tool has shown may be revealed or opened. */
+const shown = new Set()
+const ctx = {
+  app, shell, dialog, engine, clean,
+  ffmpeg: () => ffmpegPath(),
+  win: () => win,
+  allow: (...ps) => ps.flat().forEach((p) => p && shown.add(String(p))),
+  stopped: () => stopNow,
+  handle: (name, fn) => ipcMain.handle('tool:' + name, async (e, args) => fn(args ?? {}, { emit: (ev, v) => { try { e.sender.send('tool:' + ev, v) } catch { /* window gone */ } } })),
+  /* a long job: the lock, the computer kept awake, Stop turned into { stopped: true } */
+  async run(fn) {
+    if (scanning) throw new Error('A scan is already running.')
+    scanning = true; stopNow = false
+    const awake = powerSaveBlocker.start('prevent-app-suspension')
+    try { return await fn() } catch (err) {
+      if (err instanceof engine.Stopped || err?.name === 'Stopped' || err?.message === 'Stopped') return { stopped: true }
+      throw err
+    } finally { scanning = false; powerSaveBlocker.stop(awake) }
+  },
+  /* a page of HTML made into a PDF the person saves (Media report, Contact sheet) */
+  async savePDF(html, name, { landscape = false } = {}) {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (canceled || !filePath) return ''
+    // through a file, not a data: address: a sheet of many pictures is bigger than one may be
+    const tmp = path.join(app.getPath('temp'), `roartwin-${process.pid}-${Date.now()}.html`)
+    fs.writeFileSync(tmp, String(html), 'utf8')
+    const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })
+    try {
+      await w.loadFile(tmp)
+      fs.writeFileSync(filePath, await w.webContents.printToPDF({ landscape, printBackground: true, pageSize: 'A4', margins: { marginType: 'none' } }))
+    } finally { w.destroy(); fs.rmSync(tmp, { force: true }) }
+    shown.add(filePath); shell.showItemInFolder(filePath)
+    return filePath
+  },
+  /* a text file the person saves (CSV, a log) */
+  async saveText(text, name, ext = 'csv') {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] })
+    if (canceled || !filePath) return ''
+    fs.writeFileSync(filePath, (ext === 'csv' ? '\ufeff' : '') + String(text), 'utf8')
+    shown.add(filePath); shell.showItemInFolder(filePath)
+    return filePath
+  },
+}
+tools.register(ctx)
+
+const known = (p) => shown.has(p) || (lastClean || []).some((c) => (c.found || []).includes(p))
   || (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
-  || !!lastCopy && [...lastCopy.reports, ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
+  || !!lastCopy && [...lastCopy.reports, ...(lastCopy.mhl || []), ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
 ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemInFolder(String(p)) })
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)
@@ -278,15 +330,15 @@ function offerApplications() {
   if (process.platform !== 'darwin' || !app.isPackaged || app.isInApplicationsFolder()) return false
   const r = dialog.showMessageBoxSync({
     type: 'question', buttons: ['Move to Applications', 'Not now'], defaultId: 0, cancelId: 1,
-    message: 'Move RoarTwin to Applications?',
-    detail: 'From there RoarTwin updates itself, with nothing to download or install by hand. It opens again by itself.',
+    message: 'Move RoarKit to Applications?',
+    detail: 'From there RoarKit updates itself, with nothing to download or install by hand. It opens again by itself.',
   })
   if (r !== 0) return false
   try {
     // an older RoarTwin already in Applications is replaced by this one
     return app.moveToApplicationsFolder({ conflictHandler: () => true })
   } catch (e) {
-    dialog.showErrorBox('RoarTwin could not move itself', `${e?.message || e}\n\nDrag RoarTwin into the Applications folder yourself and open it from there.`)
+    dialog.showErrorBox('RoarKit could not move itself', `${e?.message || e}\n\nDrag RoarKit into the Applications folder yourself and open it from there.`)
     return false
   }
 }

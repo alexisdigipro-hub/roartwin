@@ -20,8 +20,8 @@ jobs:
       - run: npm install --no-audit --no-fund
       - name: Syntax of every script
         run: |
-          for f in electron/*.js test/*.js; do node --check "$f"; done
-          for f in app/*.js; do node --input-type=module --check < "$f"; done
+          for f in electron/*.js electron/tools/*.js test/*.js; do node --check "$f"; done
+          for f in app/*.js app/tools/*.js; do node --input-type=module --check < "$f"; done
           node -e "require('./package.json')"
       - name: The engine on real files
         run: npm test

@@ -1,4 +1,4 @@
-# RoarTwin · instructions for Claude Code
+# RoarKit (RoarTwin until 28 Oct 2026) · instructions for Claude Code
 
 RoarTwin finds duplicate files on folders and drives, and the same video in another file. The Mad Lions Lab
 (Alex Konstantinidis, film director, Athens; not a developer). Talk to him in Greek, friendly and concrete, no em
@@ -10,6 +10,9 @@ dashes; the app's own text is English by default, with Greek as a choice (app.js
 - The engine is `electron/engine.js`, plain Node, tested by `npm test` on real files made with ffmpeg
   (FFMPEG=/usr/bin/ffmpeg node test/engine.test.js where npm cannot install). Change it only with the test passing.
 - Clean up (28 Oct): electron/clean.js, a fixed list of cache places per system, only what is inside them, to the Trash; change it only with test/clean.test.js passing.
+- Many tools (Alex, 28 Oct): a side menu (app.js NAV); each new tool is app/tools/<id>.js + electron/tools/<id>.js +
+  test/<id>.test.js, its CSS in app/tools/tools-*.css; Language and the skips live in Settings. The name on screen is
+  RoarKit (app.js NAME); the app file stays RoarTwin.app until the release after 0.3.0 (see README, The name).
 - Never delete a file: shell.trashItem only, and one file of each group always stays (checked in app.js and main.js).
 - Look: RoarMe's dark glass (graphite, round glass buttons, pill fields, soft tiles, the chosen option as glass with
   the sliding lens), accent #ff453a.
