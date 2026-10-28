@@ -84,6 +84,24 @@ export function demoTwin() {
         failed: [{ path: '/Volumes/CARD_A/CLIP/A003_C021.mov', name: 'A003_C021.mov', target: '/Volumes/SHUTTLE_2/CARD_A', error: 'The copy is not the same as the card (corrupted on the way). Copy it again.' }],
       }
     },
+    // Clean up: a Mac's caches, measured one by one
+    cleanLook: async () => {
+      const got = [
+        { id: 'resolve', name: 'DaVinci Resolve render cache', what: 'CacheClip: the frames Resolve renders to play smoothly. Made again when needed.', on: true, size: 86.4e9, files: 21840, count: 312, found: ['/Users/alex/Movies/CacheClip'], open: [] },
+        { id: 'resolve-logs', name: 'DaVinci Resolve logs', what: 'Old log files Resolve writes for its support team.', on: true, size: 0.9e9, files: 412, count: 40, found: ['/Users/alex/Library/Application Support/Blackmagic Design/DaVinci Resolve/logs'], open: [] },
+        { id: 'adobe-media', name: 'Adobe media cache', what: 'Premiere Pro, After Effects, Media Encoder and Audition: the conformed audio and indexes of every clip ever imported. Made again when a project opens.', on: true, size: 41.2e9, files: 9120, count: 9120, found: ['/Users/alex/Library/Application Support/Adobe/Common/Media Cache Files'], open: ['Adobe Premiere Pro'] },
+        { id: 'adobe-team', name: 'Adobe Team Projects cache', what: 'Local copies of Premiere and After Effects team projects.', on: false, size: 0, files: 0, count: 0, found: [], open: [] },
+        { id: 'ae-disk', name: 'After Effects disk cache', what: 'The frames After Effects keeps to preview faster. Made again when needed.', on: true, size: 23.7e9, files: 4410, count: 3, found: ['/Users/alex/Library/Caches/Adobe/After Effects'], open: [] },
+        { id: 'caches', name: 'Apps cache', what: 'What every other program keeps to start faster: browsers, Spotify, Slack, Final Cut and the rest. Each makes it again.', on: true, size: 12.6e9, files: 88412, count: 214, found: ['/Users/alex/Library/Caches'], open: [] },
+        { id: 'logs', name: 'Logs', what: 'Old diagnostic files programs and macOS write.', on: true, size: 0.4e9, files: 1210, count: 32, found: ['/Users/alex/Library/Logs'], open: [] },
+        { id: 'ios-updates', name: 'iPhone and iPad updates', what: 'iOS installers the Mac downloaded once to update a phone or a tablet.', on: true, size: 7.1e9, files: 1, count: 1, found: ['/Users/alex/Library/iTunes/iPhone Software Updates'], open: [] },
+        { id: 'installers', name: 'Installers in Downloads', what: '.dmg and .pkg files left in Downloads after a program was installed. Look before you choose them.', on: false, size: 5.3e9, files: 9, count: 9, found: ['/Users/alex/Downloads'], open: [] },
+      ]
+      for (const c of got) { (window.__cleanTick || (() => {}))({ id: c.id, size: c.size }); await wait(120) }
+      return got
+    },
+    clean: async (ids) => ({ ok: ids.length, freed: 1e9 * ids.length, failed: [] }),
+    onCleanTick: (fn) => { window.__cleanTick = fn; return () => { window.__cleanTick = null } },
     // a card put in: the page can be shown it from a test (window.__card)
     onCard: (fn) => { window.__card = fn; return () => {} },
     recheck: async () => {

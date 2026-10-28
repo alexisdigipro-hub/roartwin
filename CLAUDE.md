@@ -9,6 +9,7 @@ dashes; the app's own text is English by default, with Greek as a choice (app.js
   ffmpegPath). The Mac build makes arm64 then x64, each with its own ffmpeg (package.json ffmpeg:arm64 / ffmpeg:x64).
 - The engine is `electron/engine.js`, plain Node, tested by `npm test` on real files made with ffmpeg
   (FFMPEG=/usr/bin/ffmpeg node test/engine.test.js where npm cannot install). Change it only with the test passing.
+- Clean up (28 Oct): electron/clean.js, a fixed list of cache places per system, only what is inside them, to the Trash; change it only with test/clean.test.js passing.
 - Never delete a file: shell.trashItem only, and one file of each group always stays (checked in app.js and main.js).
 - Look: RoarMe's dark glass (graphite, round glass buttons, pill fields, soft tiles, the chosen option as glass with
   the sliding lens), accent #ff453a.

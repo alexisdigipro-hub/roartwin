@@ -1,14 +1,14 @@
 {
   "name": "roartwin",
   "productName": "RoarTwin",
-  "version": "0.1.8",
+  "version": "0.2.0",
   "description": "RoarTwin: finds duplicate files, and the same video in another file. The Mad Lions Lab.",
   "author": "THEMADLIONS",
   "private": true,
   "main": "electron/main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/engine.test.js",
+    "test": "node test/clean.test.js && node test/engine.test.js",
     "dist:mac": "npm run ffmpeg:arm64 && electron-builder --mac dmg --arm64 --publish never && npm run ffmpeg:x64 && electron-builder --mac dmg --x64 --publish never",
     "dist:win": "electron-builder --win --publish never",
     "ffmpeg:arm64": "node -e \"require('fs').rmSync('node_modules/ffmpeg-static/ffmpeg',{force:true})\" && npm_config_arch=arm64 npm rebuild ffmpeg-static && file node_modules/ffmpeg-static/ffmpeg",
@@ -33,6 +33,7 @@
       "electron/preload.js",
       "electron/updater.js",
       "electron/engine.js",
+      "electron/clean.js",
       "app/**/*",
       "package.json"
     ],
