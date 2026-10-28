@@ -19,5 +19,6 @@ import files from './files.js'
 import archive from './archive.js'
 import drives from './drives.js'
 import speed from './speed.js'
+import vault from './vault.js'
 
-export default [space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed]
+export default [space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, vault]
