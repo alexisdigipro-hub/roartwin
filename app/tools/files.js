@@ -482,4 +482,6 @@ const el = {
   'A folder cannot go inside itself.': 'Ένας φάκελος δεν μπαίνει μέσα στον εαυτό του.', 'A file with that name appeared meanwhile.': 'Εμφανίστηκε στο μεταξύ αρχείο με αυτό το όνομα.',
 }
 
-export default { id: 'files', el, view, top, demo }
+// back and forward (app.js): the folders the two panes show
+const nav = { get: () => ({ p: F.panes.map((x) => x.path), a: F.active }), set: (s) => { F.active = s.a; s.p.forEach((p, i) => { if (p && p !== F.panes[i].path) openIn(i, p) }) } }
+export default { id: 'files', el, view, top, demo, nav }

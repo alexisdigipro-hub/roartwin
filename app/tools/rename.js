@@ -195,4 +195,6 @@ const el = {
   'Some names clash or are taken. Change the rule first.': 'Κάποια ονόματα συγκρούονται ή υπάρχουν ήδη. Άλλαξε πρώτα τον κανόνα.', 'Choose the folder first.': 'Διάλεξε πρώτα τον φάκελο.', 'The old name is taken now.': 'Το παλιό όνομα το έχει πια άλλο αρχείο.',
 }
 
-export default { id: 'rename', el, view, top, demo }
+// back and forward (app.js): the folder and its preview
+const nav = { get: () => ({ dir: R.dir, rows: R.rows, only: R.only }), set: (s) => { Object.assign(R, s) } }
+export default { id: 'rename', el, view, top, demo, nav }

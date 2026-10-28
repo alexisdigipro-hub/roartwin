@@ -211,6 +211,8 @@ function viewMake(ctx) {
 }
 
 export default {
+  // back and forward (app.js): what makes this tool's screen
+  nav: { get: () => ({ mode: A.mode, info: A.info, done: A.done }), set: (s) => { Object.assign(A, s) } },
   id: 'archive',
   top(ctx) {
     init(ctx)

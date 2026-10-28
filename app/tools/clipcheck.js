@@ -15,6 +15,8 @@ async function start(ctx) {
 }
 
 export default {
+  // back and forward (app.js): what makes this tool's screen
+  nav: { get: () => ({ res: st.res }), set: (s) => { st.res = s.res } },
   id: 'clipcheck',
   el: {
     ...EL_SHARED,
