@@ -20,5 +20,6 @@ import archive from './archive.js'
 import drives from './drives.js'
 import speed from './speed.js'
 import vault from './vault.js'
+import stats from './stats.js'
 
-export default [space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, vault]
+export default [space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, stats, vault]
