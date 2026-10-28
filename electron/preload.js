@@ -26,6 +26,9 @@ contextBridge.exposeInMainWorld('twin', {
   cleanLook: () => ipcRenderer.invoke('twin:clean-look'),
   clean: (ids) => ipcRenderer.invoke('twin:clean', [...ids].map(String)),
   onCleanTick: on('twin:clean-tick'),
+  // the other tools (electron/tools/*.js): one door each, by name ('space-scan', 'report-save'…); events the same way
+  tool: (name, args) => ipcRenderer.invoke('tool:' + String(name), args ?? null),
+  onTool: (name, fn) => on('tool:' + String(name))(fn),
   update: {
     state: () => ipcRenderer.invoke('twin:update-state'),
     check: () => ipcRenderer.invoke('twin:update-check'),

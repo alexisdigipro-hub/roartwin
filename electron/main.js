@@ -8,6 +8,7 @@ const path = require('path')
 const { pathToFileURL } = require('url')
 const engine = require('./engine')
 const clean = require('./clean')
+const tools = require('./tools')
 const { execFile } = require('child_process')
 const updater = require('./updater')
 
@@ -251,7 +252,54 @@ ipcMain.handle('twin:clean', async (_e, ids) => {
   return { ok: ok.length, freed, failed }
 })
 
-const known = (p) => (lastClean || []).some((c) => (c.found || []).includes(p))
+/* The other tools (Alex, 28 Oct: "one app, a utility of many tools"): each in electron/tools/<name>.js, given what it
+   needs here. One job at a time across every tool (the same lock as a scan), the Stop button stops any of them, and
+   only paths a tool has shown may be revealed or opened. */
+const shown = new Set()
+const ctx = {
+  app, shell, dialog, engine, clean,
+  ffmpeg: () => ffmpegPath(),
+  win: () => win,
+  allow: (...ps) => ps.flat().forEach((p) => p && shown.add(String(p))),
+  stopped: () => stopNow,
+  handle: (name, fn) => ipcMain.handle('tool:' + name, async (e, args) => fn(args ?? {}, { emit: (ev, v) => { try { e.sender.send('tool:' + ev, v) } catch { /* window gone */ } } })),
+  /* a long job: the lock, the computer kept awake, Stop turned into { stopped: true } */
+  async run(fn) {
+    if (scanning) throw new Error('A scan is already running.')
+    scanning = true; stopNow = false
+    const awake = powerSaveBlocker.start('prevent-app-suspension')
+    try { return await fn() } catch (err) {
+      if (err instanceof engine.Stopped || err?.name === 'Stopped' || err?.message === 'Stopped') return { stopped: true }
+      throw err
+    } finally { scanning = false; powerSaveBlocker.stop(awake) }
+  },
+  /* a page of HTML made into a PDF the person saves (Media report, Contact sheet) */
+  async savePDF(html, name, { landscape = false } = {}) {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: 'PDF', extensions: ['pdf'] }] })
+    if (canceled || !filePath) return ''
+    // through a file, not a data: address: a sheet of many pictures is bigger than one may be
+    const tmp = path.join(app.getPath('temp'), `roartwin-${process.pid}-${Date.now()}.html`)
+    fs.writeFileSync(tmp, String(html), 'utf8')
+    const w = new BrowserWindow({ show: false, webPreferences: { sandbox: true, javascript: false } })
+    try {
+      await w.loadFile(tmp)
+      fs.writeFileSync(filePath, await w.webContents.printToPDF({ landscape, printBackground: true, pageSize: 'A4', margins: { marginType: 'none' } }))
+    } finally { w.destroy(); fs.rmSync(tmp, { force: true }) }
+    shown.add(filePath); shell.showItemInFolder(filePath)
+    return filePath
+  },
+  /* a text file the person saves (CSV, a log) */
+  async saveText(text, name, ext = 'csv') {
+    const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: name, filters: [{ name: ext.toUpperCase(), extensions: [ext] }] })
+    if (canceled || !filePath) return ''
+    fs.writeFileSync(filePath, (ext === 'csv' ? '\ufeff' : '') + String(text), 'utf8')
+    shown.add(filePath); shell.showItemInFolder(filePath)
+    return filePath
+  },
+}
+tools.register(ctx)
+
+const known = (p) => shown.has(p) || (lastClean || []).some((c) => (c.found || []).includes(p))
   || (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
   || !!lastCopy && [...lastCopy.reports, ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)

@@ -819,4 +819,6 @@ async function looksLikeCard(root) {
   return false
 }
 
-module.exports = { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside }
+module.exports = { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside,
+  // for the other tools (electron/tools/): the walk, ffmpeg, a preview, the kinds of file
+  list, ff, probe, thumb, pool, JOBS, VIDEO, AUDIO, PHOTO, isAudio, BUNDLE, SYSTEM }
