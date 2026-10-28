@@ -53,7 +53,7 @@ function itemRow(ctx, i, recent) {
     h('button', { class: 'check' + (on ? ' on' : ''), html: I.check, disabled: !!i.protected, title: i.protected ? t('In a Masters folder: it stays') : on ? t('Keep it') : t('Move to the Trash'), 'aria-label': i.path,
       onclick: () => { on ? st.sel.delete(i.path) : st.sel.set(i.path, i); ctx.draw() } }),
     h('span', { class: 'sp-ic', html: I.box }),
-    h('span', { class: 'sp-name' }, h('b', { title: i.project }, i.project), h('small', { title: i.path }, '‎' + i.path)),
+    h('span', { class: 'sp-name' }, h('b', { title: i.project }, i.project), h('small', { class: 'sp-path', title: i.path }, '‎' + i.path)),
     h('span', { class: 'sp-meta' },
       h('span', { class: 'chip tint', style: { '--c': APP[i.app] || 'var(--acc)' } }, h('i'), i.app + ' · ' + t(i.what)),
       h('span', { class: 'chip', title: t('The last time anything in it changed') }, t('Last changed {d}', { d: dateOf(i.newest) })),
