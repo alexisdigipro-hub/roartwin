@@ -1,5 +1,5 @@
 // Drive health (Alex, 28 Oct): a tile a drive: its name, kind, health as the drive reports it (SMART), free space, file
-// system, and the RoarTwin copy on it, with Check it now. The Mac/Windows side is electron/tools/drives.js.
+// system, and the RoarKit copy on it, with Check it now. The Mac/Windows side is electron/tools/drives.js.
 let data = null, loading = false, error = ''
 
 async function load(ctx) {

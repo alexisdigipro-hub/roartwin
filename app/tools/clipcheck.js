@@ -19,7 +19,7 @@ export default {
   el: {
     ...EL_SHARED,
     'Clip check': 'Έλεγχος clips', 'Does every clip <b>play</b>?': 'Παίζει κάθε <b>clip</b>;',
-    'RoarTwin plays every clip of a card or a folder through, frame by frame and with its sound, and lists any that is cut short or damaged. Check before the card is formatted.': 'Το RoarTwin παίζει κάθε clip μιας κάρτας ή ενός φακέλου από την αρχή ως το τέλος, καρέ καρέ και με τον ήχο του, και δείχνει όποιο είναι κομμένο ή χαλασμένο. Έλεγξέ το πριν γίνει format η κάρτα.',
+    'RoarKit plays every clip of a card or a folder through, frame by frame and with its sound, and lists any that is cut short or damaged. Check before the card is formatted.': 'Το RoarKit παίζει κάθε clip μιας κάρτας ή ενός φακέλου από την αρχή ως το τέλος, καρέ καρέ και με τον ήχο του, και δείχνει όποιο είναι κομμένο ή χαλασμένο. Έλεγξέ το πριν γίνει format η κάρτα.',
     'Check the clips': 'Έλεγξε τα clips', 'Playing every clip through': 'Παίζει κάθε clip ολόκληρο', 'Slow on purpose: every frame is read. Nothing is changed.': 'Αργό σκόπιμα: διαβάζεται κάθε καρέ. Τίποτα δεν αλλάζει.',
     'Every clip <b>plays</b>.': 'Όλα τα clips <b>παίζουν</b>.', '{n} clips have a <b>problem</b>.': '{n} clips έχουν <b>πρόβλημα</b>.', '1 clip has a <b>problem</b>.': '1 clip έχει <b>πρόβλημα</b>.',
     '{a} of {b} play right': '{a} από {b} παίζουν σωστά', 'checked in {t}': 'ελέγχθηκαν σε {t}', 'New check': 'Νέος έλεγχος',
@@ -59,7 +59,7 @@ export default {
     }
     return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card' },
       h('div', { class: 'hero' }, h('h1', { html: t('Does every clip <b>play</b>?') }),
-        h('p', {}, t('RoarTwin plays every clip of a card or a folder through, frame by frame and with its sound, and lists any that is cut short or damaged. Check before the card is formatted.'))),
+        h('p', {}, t('RoarKit plays every clip of a card or a folder through, frame by frame and with its sound, and lists any that is cut short or damaged. Check before the card is formatted.'))),
       folderBox(ctx, st, 'clipcheck'),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => start(ctx) }, ico('pulse'), t('Check the clips'))),
       h('p', { class: 'note' }, t('Slow on purpose: every frame is read. Nothing is changed.')))))

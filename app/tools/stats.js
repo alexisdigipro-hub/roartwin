@@ -214,9 +214,9 @@ export default {
         therm: { state: 'fair', limit: null, warnings: [] },
         top: {
           cpu: [{ name: 'DaVinci Resolve', cpu: 182.4, mem: 21.4e9, count: 1 }, { name: 'Adobe Premiere Pro 2025', cpu: 64.1, mem: 9.8e9, count: 1 }, { name: 'Google Chrome', cpu: 22.7, mem: 4.1e9, count: 14 },
-            { name: 'WindowServer', cpu: 14.2, mem: 1.2e9, count: 1 }, { name: 'RoarTwin', cpu: 3.1, mem: 0.4e9, count: 4 }, { name: 'Spotify', cpu: 1.9, mem: 0.6e9, count: 3 }, { name: 'Finder', cpu: 0.6, mem: 0.3e9, count: 1 }, { name: 'Slack', cpu: 0.5, mem: 0.9e9, count: 5 }],
+            { name: 'WindowServer', cpu: 14.2, mem: 1.2e9, count: 1 }, { name: 'RoarKit', cpu: 3.1, mem: 0.4e9, count: 4 }, { name: 'Spotify', cpu: 1.9, mem: 0.6e9, count: 3 }, { name: 'Finder', cpu: 0.6, mem: 0.3e9, count: 1 }, { name: 'Slack', cpu: 0.5, mem: 0.9e9, count: 5 }],
           mem: [{ name: 'DaVinci Resolve', cpu: 182.4, mem: 21.4e9, count: 1 }, { name: 'Adobe Premiere Pro 2025', cpu: 64.1, mem: 9.8e9, count: 1 }, { name: 'Google Chrome', cpu: 22.7, mem: 4.1e9, count: 14 },
-            { name: 'WindowServer', cpu: 14.2, mem: 1.2e9, count: 1 }, { name: 'Slack', cpu: 0.5, mem: 0.9e9, count: 5 }, { name: 'Spotify', cpu: 1.9, mem: 0.6e9, count: 3 }, { name: 'RoarTwin', cpu: 3.1, mem: 0.4e9, count: 4 }, { name: 'Finder', cpu: 0.6, mem: 0.3e9, count: 1 }],
+            { name: 'WindowServer', cpu: 14.2, mem: 1.2e9, count: 1 }, { name: 'Slack', cpu: 0.5, mem: 0.9e9, count: 5 }, { name: 'Spotify', cpu: 1.9, mem: 0.6e9, count: 3 }, { name: 'RoarKit', cpu: 3.1, mem: 0.4e9, count: 4 }, { name: 'Finder', cpu: 0.6, mem: 0.3e9, count: 1 }],
         },
       }
     },

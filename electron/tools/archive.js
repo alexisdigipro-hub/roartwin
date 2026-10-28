@@ -174,7 +174,7 @@ function makeTool({ tar = findTar(), platform = process.platform } = {}) {
     const k = kindOf(file)
     const dmg = Object.keys(NOT_ARCHIVE).find((e) => String(file).toLowerCase().endsWith(e))
     if (dmg) throw new Error(NOT_ARCHIVE[dmg])
-    if (!k) throw new Error('This is not an archive RoarTwin knows.')
+    if (!k) throw new Error('This is not an archive RoarKit knows.')
     const st = await fsp.stat(file)
     if (SINGLE.has(k.kind)) {
       // one file squeezed: what comes out is the same name without the ending

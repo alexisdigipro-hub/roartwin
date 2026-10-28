@@ -1,5 +1,5 @@
 // Drive health (Alex, 28 Oct): every drive the computer sees, its health as the drive itself reports it (SMART), its
-// free space, and when a RoarTwin copy on it was last checked. It only reads; nothing is changed.
+// free space, and when a RoarKit copy on it was last checked. It only reads; nothing is changed.
 // Mac: diskutil (list and info, as plists) and df. Windows: PowerShell's Get-PhysicalDisk, Get-Partition, Get-Volume.
 // The parsers are plain functions, tested on samples by test/drives.test.js.
 const fs = require('fs')

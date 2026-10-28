@@ -108,7 +108,7 @@ function reportHTML(r, words = {}) {
 <h1><b>${W(words, 'title', 'Media report')}</b></h1><div class="sub">${esc(r.root)} · ${esc(new Date(r.at || Date.now()).toLocaleString('en-GB'))}</div>
 <div class="tot"><span>${clips.length} ${W(words, 'clips', 'clips')}</span><span>${esc(hms(total))}</span><span>${esc(size(bytes))}</span>${codecs.map((c) => `<span>${esc(c)}</span>`).join('')}</div>
 <table><thead><tr><th></th><th>${W(words, 'name', 'Name')}</th><th>${W(words, 'length', 'Length')}</th><th>${W(words, 'tc', 'Timecode')}</th><th>${W(words, 'codec', 'Codec')}</th><th>${W(words, 'picture', 'Picture')}</th><th>fps</th><th>${W(words, 'sound', 'Sound')}</th><th>${W(words, 'size', 'Size')}</th><th>${W(words, 'date', 'Date')}</th></tr></thead>
-<tbody>${rows}</tbody></table><div class="foot">RoarTwin · The Mad Lions Lab</div></div></body></html>`
+<tbody>${rows}</tbody></table><div class="foot">RoarKit · The Mad Lions Lab</div></div></body></html>`
 }
 
 function contactHTML(sheet, { cols = 4, words = {} } = {}) {
@@ -119,7 +119,7 @@ function contactHTML(sheet, { cols = 4, words = {} } = {}) {
 .grid{display:grid;grid-template-columns:repeat(${n},1fr);gap:8px}.t{page-break-inside:avoid}.fr{display:grid;gap:2px}.fr img,.no{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:3px;display:block;background:#111}
 .t .nm{margin-top:3px;font-size:8.5px}.mt{color:#777;font-size:8px}</style></head><body><div class="pg">
 <h1><b>${W(words, 'title', 'Contact sheet')}</b></h1><div class="sub">${esc(sheet.root)} · ${(sheet.clips || []).length} ${W(words, 'clips', 'clips')}</div>
-<div class="grid">${tiles}</div><div class="foot">RoarTwin · The Mad Lions Lab</div></div></body></html>`
+<div class="grid">${tiles}</div><div class="foot">RoarKit · The Mad Lions Lab</div></div></body></html>`
 }
 
 /* ---------- reading the clips ---------- */

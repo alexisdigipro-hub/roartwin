@@ -30,7 +30,7 @@ export default {
     'A frame of every clip of a folder, in a grid, with its name, length and timecode. Save it as a PDF for a client or the editor.': 'Ένα καρέ από κάθε clip ενός φακέλου, σε πλέγμα, με όνομα, διάρκεια και timecode. Σώσ\' το ως PDF για πελάτη ή μοντέρ.',
     'Frames': 'Καρέ', 'One or three frames of each clip.': 'Ένα ή τρία καρέ από κάθε clip.', 'One': 'Ένα', 'Three': 'Τρία',
     'Columns': 'Στήλες', 'How many clips across the page.': 'Πόσα clips σε κάθε σειρά.', 'Page': 'Σελίδα', 'Landscape': 'Οριζόντια', 'Portrait': 'Κάθετη', 'How the PDF is turned.': 'Πώς γυρίζει το PDF.',
-    'Make the sheet': 'Φτιάξε το sheet', 'Taking the frames': 'Παίρνει τα καρέ', 'Nothing is changed: RoarTwin only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει τα clips.',
+    'Make the sheet': 'Φτιάξε το sheet', 'Taking the frames': 'Παίρνει τα καρέ', 'Nothing is changed: RoarKit only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarKit μόνο διαβάζει τα clips.',
     'Save PDF': 'Αποθήκευση PDF', 'New sheet': 'Νέο sheet', '{n} clips': '{n} clips',
   },
   top(ctx) {
@@ -66,7 +66,7 @@ export default {
         opt(t('Columns'), t('How many clips across the page.'), seg([[3, '3'], [4, '4'], [6, '6']], st.cols, (v) => setOpt(ctx, 'cols', v))),
         opt(t('Page'), t('How the PDF is turned.'), seg([[true, t('Landscape')], [false, t('Portrait')]], st.landscape, (v) => setOpt(ctx, 'landscape', v)))),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => start(ctx) }, ico('grid'), t('Make the sheet'))),
-      h('p', { class: 'note' }, t('Nothing is changed: RoarTwin only reads the clips.')))))
+      h('p', { class: 'note' }, t('Nothing is changed: RoarKit only reads the clips.')))))
   },
   demo: {
     'contact-scan': async ({ root, frames }, emit) => {

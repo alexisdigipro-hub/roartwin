@@ -124,7 +124,7 @@ export default {
     ...EL_SHARED,
     'Media report': 'Αναφορά media', 'A <b>report</b> of the clips.': 'Μια <b>αναφορά</b> των clips.',
     'Every clip of a card or a folder: length, codec, picture, frame rate, timecode and sound, with a frame of each. Save it as a PDF for the post house or as a list for Excel.': 'Κάθε clip μιας κάρτας ή ενός φακέλου: διάρκεια, codec, εικόνα, frame rate, timecode και ήχος, με ένα καρέ από το καθένα. Σώσ\' το ως PDF για το post house ή ως λίστα για το Excel.',
-    'Make the report': 'Φτιάξε την αναφορά', 'Reading the clips': 'Διαβάζει τα clips', 'Nothing is changed: RoarTwin only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarTwin μόνο διαβάζει τα clips.',
+    'Make the report': 'Φτιάξε την αναφορά', 'Reading the clips': 'Διαβάζει τα clips', 'Nothing is changed: RoarKit only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarKit μόνο διαβάζει τα clips.',
     'Export': 'Εξαγωγή', 'Save PDF': 'Αποθήκευση PDF', 'New report': 'Νέα αναφορά', 'Export the list (CSV)': 'Εξαγωγή λίστας (CSV)',
     '{n} clips': '{n} clips', '1 clip': '1 clip', 'in all': 'συνολικά',
     'Name': 'Όνομα', 'Folder': 'Φάκελος', 'Length': 'Διάρκεια', 'Timecode': 'Timecode', 'Codec': 'Codec', 'Picture': 'Εικόνα',
@@ -162,7 +162,7 @@ export default {
         h('p', {}, t('Every clip of a card or a folder: length, codec, picture, frame rate, timecode and sound, with a frame of each. Save it as a PDF for the post house or as a list for Excel.'))),
       folderBox(ctx, st, 'report'),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => start(ctx) }, ico('list'), t('Make the report'))),
-      h('p', { class: 'note' }, t('Nothing is changed: RoarTwin only reads the clips.')))))
+      h('p', { class: 'note' }, t('Nothing is changed: RoarKit only reads the clips.')))))
   },
   demo: {
     'report-scan': async ({ root }, emit) => { await demoRun('report-progress', SAMPLE_CLIPS.length, emit); return { root, clips: SAMPLE_CLIPS, took: 4200 } },

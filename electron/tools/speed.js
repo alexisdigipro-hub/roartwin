@@ -1,6 +1,6 @@
 // Disk speed test (Alex, 28 Oct): how fast a drive writes and reads, and so which codecs it can record and play.
 // A test file of its own is written in big blocks (synced to the drive before the clock stops), then read back; it is
-// RoarTwin's own temporary file, the only thing this tool ever removes, at the end and on Stop or an error.
+// RoarKit's own temporary file, the only thing this tool ever removes, at the end and on Stop or an error.
 // The read can come partly from the computer's memory (Node cannot ask the system to skip its cache): the file is
 // written fresh each time, and the page says so. Tested by test/speed.test.js.
 const fs = require('fs')

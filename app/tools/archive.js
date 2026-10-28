@@ -267,7 +267,7 @@ export default {
     'Archive': 'Αρχείο', 'Next to {n}': 'Δίπλα στο {n}', 'Next to the first one': 'Δίπλα στο πρώτο', 'Next to them': 'Δίπλα τους',
     'Make the archive': 'Φτιάξε το αρχείο', 'Nothing is written over: a name already taken gets a number.': 'Τίποτα δεν γράφεται από πάνω: ένα όνομα που υπάρχει ήδη παίρνει αριθμό.',
     'The archive is <b>ready</b>.': 'Το αρχείο είναι <b>έτοιμο</b>.', '{n}% smaller': '{n}% μικρότερο', 'Make another': 'Φτιάξε άλλο',
-    'This is not an archive RoarTwin knows.': 'Αυτό δεν είναι αρχείο συμπίεσης που ξέρει το RoarTwin.',
+    'This is not an archive RoarKit knows.': 'Αυτό δεν είναι αρχείο συμπίεσης που ξέρει το RoarKit.',
     'A .dmg is a disk image, not an archive: open it with a double click and it shows up as a drive.': 'Το .dmg είναι εικόνα δίσκου, όχι αρχείο συμπίεσης: άνοιξέ το με διπλό κλικ και εμφανίζεται σαν δίσκος.',
     'A disk image, not an archive: open it with a double click.': 'Εικόνα δίσκου, όχι αρχείο συμπίεσης: άνοιξέ τη με διπλό κλικ.',
     'This archive is locked with a password.': 'Αυτό το αρχείο είναι κλειδωμένο με κωδικό.',
