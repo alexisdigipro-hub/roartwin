@@ -1,4 +1,4 @@
-// RoarTwin updates itself, like the other Roar apps (no paid Apple certificate, so not Electron's own updater).
+// RoarKit (RoarTwin until 28 Oct) updates itself, like the other Roar apps (no paid Apple certificate, so not Electron's own updater).
 // It looks at the newest GitHub release itself, downloads the right installer in the background, and when it
 // is ready the page shows "Restart to update". Restarting (or simply quitting) swaps the app for the new one:
 // on a Mac a small script waits for RoarTwin to close, copies the new RoarTwin.app over the old one and opens it; on
@@ -79,7 +79,7 @@ async function check() {
     send({ status: 'ready', version, progress: 100 })
     if (notified !== version && Notification.isSupported()) {
       notified = version
-      const n = new Notification({ title: `RoarTwin ${version} is ready`, body: 'Restart RoarTwin to update. It takes a few seconds.' })
+      const n = new Notification({ title: `RoarKit ${version} is ready`, body: 'Restart RoarKit to update. It takes a few seconds.' })
       n.on('click', () => { BrowserWindow.getAllWindows()[0]?.show() })
       n.show()
     }
@@ -121,13 +121,17 @@ for i in $(seq 1 100); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done
 MNT="$(mktemp -d /tmp/roartwin-update.XXXXXX)"
 if hdiutil attach -nobrowse -readonly -noautoopen -mountpoint "$MNT" "$DMG" >/dev/null 2>&1; then
   SRC="$(ls -d "$MNT"/*.app 2>/dev/null | head -1)"
-  if [ -n "$SRC" ] && ditto "$SRC" "$APP.new" && [ -x "$APP.new/Contents/MacOS/RoarTwin" ]; then
-    rm -rf "$APP.old" && mv "$APP" "$APP.old" && mv "$APP.new" "$APP" && rm -rf "$APP.old"
-    [ -d "$APP" ] || mv "$APP.old" "$APP"
+  # the new app keeps its own name (RoarTwin became RoarKit, 28 Oct), next to where the old one was
+  DEST="$(dirname "$APP")/$(basename "$SRC")"
+  EXE="$(defaults read "$SRC/Contents/Info" CFBundleExecutable 2>/dev/null)"
+  if [ -n "$SRC" ] && [ -n "$EXE" ] && ditto "$SRC" "$DEST.new" && [ -x "$DEST.new/Contents/MacOS/$EXE" ]; then
+    rm -rf "$APP.old" && mv "$APP" "$APP.old"
+    [ "$DEST" != "$APP" ] && rm -rf "$DEST"
+    if mv "$DEST.new" "$DEST"; then rm -rf "$APP.old"; APP="$DEST"; else mv "$APP.old" "$APP"; rm -rf "$DEST.new"; fi
     xattr -dr com.apple.quarantine "$APP" 2>/dev/null
     rm -f "$DMG"
   else
-    rm -rf "$APP.new"
+    rm -rf "$DEST.new"
   fi
   hdiutil detach "$MNT" -quiet -force >/dev/null 2>&1
 fi

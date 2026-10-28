@@ -13,6 +13,10 @@ const { execFile } = require('child_process')
 const updater = require('./updater')
 
 nativeTheme.themeSource = 'dark'
+/* RoarTwin is called RoarKit since 28 Oct: its settings, its Vault and everything it keeps stay in the old folder,
+   whatever the app is called, so nothing is lost when the app itself takes the new name. */
+app.setPath('userData', path.join(app.getPath('appData'), 'RoarTwin'))
+app.setName('RoarKit')
 
 // ffmpeg comes with the app (ffmpeg-static); inside a packed app it sits next to the archive, not in it
 function ffmpegPath() {
@@ -53,7 +57,7 @@ function open() {
   win.webContents.on('will-navigate', (e, url) => { if (!url.startsWith('app://twin/')) { e.preventDefault(); openOutside(url) } })
   win.on('close', (e) => {
     if (scanning && !quitting) {
-      const n = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Stop and close', 'Keep scanning'], defaultId: 1, message: 'RoarTwin is still scanning.', detail: 'Closing the window stops the scan.' })
+      const n = dialog.showMessageBoxSync(win, { type: 'question', buttons: ['Stop and close', 'Keep scanning'], defaultId: 1, message: 'RoarKit is still working.', detail: 'Closing the window stops it.' })
       if (n === 1) { e.preventDefault(); return }
       stopNow = true
     }
@@ -326,15 +330,15 @@ function offerApplications() {
   if (process.platform !== 'darwin' || !app.isPackaged || app.isInApplicationsFolder()) return false
   const r = dialog.showMessageBoxSync({
     type: 'question', buttons: ['Move to Applications', 'Not now'], defaultId: 0, cancelId: 1,
-    message: 'Move RoarTwin to Applications?',
-    detail: 'From there RoarTwin updates itself, with nothing to download or install by hand. It opens again by itself.',
+    message: 'Move RoarKit to Applications?',
+    detail: 'From there RoarKit updates itself, with nothing to download or install by hand. It opens again by itself.',
   })
   if (r !== 0) return false
   try {
     // an older RoarTwin already in Applications is replaced by this one
     return app.moveToApplicationsFolder({ conflictHandler: () => true })
   } catch (e) {
-    dialog.showErrorBox('RoarTwin could not move itself', `${e?.message || e}\n\nDrag RoarTwin into the Applications folder yourself and open it from there.`)
+    dialog.showErrorBox('RoarKit could not move itself', `${e?.message || e}\n\nDrag RoarKit into the Applications folder yourself and open it from there.`)
     return false
   }
 }
