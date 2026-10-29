@@ -235,4 +235,4 @@ function register(ctx) {
   })
 }
 
-module.exports = { register, parsePlist, parseDf, macDrives, winDrives, lastReport, health, quietMount, ejectError }
+module.exports = { register, readDrives, parsePlist, parseDf, macDrives, winDrives, lastReport, health, quietMount, ejectError }

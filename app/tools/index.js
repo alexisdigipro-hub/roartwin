@@ -22,5 +22,7 @@ import drives from './drives.js'
 import speed from './speed.js'
 import vault from './vault.js'
 import stats from './stats.js'
+import startup from './startup.js'
+import uninstall from './uninstall.js'
 
-export default [home, space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, stats, vault]
+export default [home, space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, stats, startup, uninstall, vault]

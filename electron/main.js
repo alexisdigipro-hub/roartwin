@@ -11,6 +11,8 @@ const clean = require('./clean')
 const tools = require('./tools')
 const { execFile } = require('child_process')
 const updater = require('./updater')
+const jobsMod = require('./jobs')
+const trayMod = require('./tray')
 
 nativeTheme.themeSource = 'dark'
 /* the look the person chose (Settings > Appearance), kept here from the last run so the window opens in it, not dark first */
@@ -262,7 +264,8 @@ ipcMain.handle('twin:clean-look', async (e) => {
     throw err
   } finally { scanning = false }
 })
-ipcMain.handle('twin:clean', async (_e, ids) => {
+/* the chosen places to the Trash: by the page's Move to Trash, and by the weekly job (Do by itself) */
+async function cleanPlaces(ids) {
   if (scanning) throw new Error('A scan is already running.')
   scanning = true; stopNow = false
   const ok = [], failed = []
@@ -280,8 +283,12 @@ ipcMain.handle('twin:clean', async (_e, ids) => {
       }
     }
   } finally { scanning = false }
-  jobDone('clean')
   return { ok: ok.length, freed, failed }
+}
+ipcMain.handle('twin:clean', async (_e, ids) => {
+  const r = await cleanPlaces(ids)
+  jobDone('clean')
+  return r
 })
 
 /* The other tools (Alex, 28 Oct: "one app, a utility of many tools"): each in electron/tools/<name>.js, given what it
@@ -348,13 +355,23 @@ ipcMain.handle('twin:export', async (_e, text) => {
 })
 ipcMain.handle('twin:version', () => app.getVersion())
 /* Settings (Alex, 28 Oct): the look of the app's own windows, menus and scroll bars, and the end-of-job notification */
-const prefs = { lang: 'en', theme: 'dark', notify: true, sound: false, company: '', companyLine: '' }
+const prefs = { lang: 'en', theme: 'dark', notify: true, sound: false, company: '', companyLine: '', tray: null }
+/* what must hold before the page opens (and while no window is open): the menu bar icon and the language of its menu
+   and of the jobs' notifications, kept in userData/background.json */
+const BG_FILE = () => path.join(app.getPath('userData'), 'background.json')
+try { const v = JSON.parse(fs.readFileSync(BG_FILE(), 'utf8')); if (typeof v.tray === 'boolean') prefs.tray = v.tray; if (v.lang) prefs.lang = v.lang } catch { /* first start */ }
+// the menu bar icon is on at first on a Mac (Alex, 29 Oct), off on Windows until it is chosen
+const trayOn = () => (prefs.tray == null ? process.platform === 'darwin' : prefs.tray)
 // the window's own colour under the page (not on a Mac, whose window is see-through for the side menu's glass)
 const paintWindow = () => { if (process.platform === 'darwin') return; try { win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#16181d' : '#f3f4f7') } catch { /* closing */ } }
 nativeTheme.on('updated', () => { if (prefs.theme === 'auto') paintWindow() })
 ipcMain.handle('twin:prefs', (_e, v) => {
-  Object.assign(prefs, Object.fromEntries(Object.entries(v || {}).filter(([k]) => k in prefs)))
+  const was = { tray: trayOn(), lang: prefs.lang }
+  Object.assign(prefs, Object.fromEntries(Object.entries(v || {}).filter(([k]) => k in prefs && !(k === 'tray' && typeof v[k] !== 'boolean'))))
   try { fs.writeFileSync(LOOK_FILE(), JSON.stringify({ theme: prefs.theme })) } catch { /* the next start opens dark, nothing more */ }
+  try { fs.writeFileSync(BG_FILE(), JSON.stringify({ tray: prefs.tray, lang: prefs.lang })) } catch { /* kept for this run */ }
+  if (trayOn() !== was.tray) tray?.show(trayOn())
+  else if (prefs.lang !== was.lang) tray?.relabel()
   nativeTheme.themeSource = prefs.theme === 'auto' ? 'system' : prefs.theme === 'light' ? 'light' : 'dark'
   const light = !nativeTheme.shouldUseDarkColors
   try {
@@ -376,10 +393,77 @@ function jobDone(kind = 'job') {
     else win.flashFrame(true)
   } catch { /* no notifications here */ }
 }
+/* ---------- Do by itself (Alex, 29 Oct): the weekly Clean up and the monthly backup check, see jobs.js ---------- */
+const JOB_TEXT = {
+  en: { clean: 'Clean up by itself: {a} moved to the Trash.', cleanNone: 'Clean up by itself: nothing to clear.', cleanSkip: ' Left alone while open: {a}.',
+    backup: 'Backup check by itself: {a} of {b} files as they were.', backupBad: 'Backup check by itself: {a} files changed or gone. Open RoarKit to see them.', backupGone: ' Not connected: {a}.', fail: 'A job by itself did not run: {a}' },
+  el: { clean: 'Καθάρισμα μόνο του: {a} πήγαν στον Κάδο.', cleanNone: 'Καθάρισμα μόνο του: τίποτα για καθάρισμα.', cleanSkip: ' Έμειναν όσο είναι ανοιχτά: {a}.',
+    backup: 'Έλεγχος backup μόνος του: {a} από {b} αρχεία όπως ήταν.', backupBad: 'Έλεγχος backup μόνος του: {a} αρχεία άλλαξαν ή χάθηκαν. Άνοιξε το RoarKit για να τα δεις.', backupGone: ' Δεν είναι συνδεδεμένοι: {a}.', fail: 'Μια αυτόματη δουλειά δεν έγινε: {a}' },
+}
+const jt = (k, vars = {}) => String((JOB_TEXT[prefs.lang] || JOB_TEXT.en)[k]).replace(/\{(\w+)\}/g, (_, x) => vars[x] ?? '')
+const gbText = (n) => trayMod.gb(n)
+/* each job's work, with the same lock as every other job of the app; the result is kept as data (the page writes it
+   in its own words) and as a sentence for the notification */
+async function runJob(id, cfg) {
+  if (id === 'clean') {
+    // the safe caches only: what Clean up chooses at first, never the installers in Downloads
+    const ids = places().filter((i) => i.on && i.kind === 'inside').map((i) => i.id)
+    const r = await cleanPlaces(ids)
+    const skipped = [...new Set(r.failed.filter((f) => f.apps).flatMap((f) => f.apps))]
+    return { freed: r.freed, files: r.ok, skipped, text: (r.freed ? jt('clean', { a: gbText(r.freed) }) : jt('cleanNone')) + (skipped.length ? jt('cleanSkip', { a: skipped.join(', ') }) : '') }
+  }
+  if (id === 'backup') {
+    const folders = []
+    for (const folder of cfg.folders || []) {
+      if (!fs.existsSync(folder)) { folders.push({ folder, error: 'gone' }); continue }
+      if (scanning) throw new Error('A scan is already running.')
+      scanning = true; stopNow = false
+      const awake = powerSaveBlocker.start('prevent-app-suspension')
+      try {
+        const r = await engine.recheck({ folder })
+        folders.push({ folder, total: r.total, safe: r.safe, changed: r.missing.filter((m) => m.why === 'changed').length, gone: r.missing.filter((m) => m.why === 'gone').length, when: r.when })
+      } catch (err) { folders.push({ folder, error: String(err?.message || err) }) } finally { scanning = false; powerSaveBlocker.stop(awake) }
+    }
+    const total = folders.reduce((n, f) => n + (f.total || 0), 0), safe = folders.reduce((n, f) => n + (f.safe || 0), 0)
+    const away = folders.filter((f) => f.error).map((f) => path.basename(f.folder) || f.folder)
+    const problem = safe < total || away.length > 0 || !folders.length
+    return { folders, problem, text: (safe < total ? jt('backupBad', { a: total - safe }) : jt('backup', { a: safe, b: total })) + (away.length ? jt('backupGone', { a: away.join(', ') }) : '') }
+  }
+  throw new Error('No such job.')
+}
+let jobs = null
+function startJobs() {
+  jobs = jobsMod.create({
+    file: path.join(app.getPath('userData'), 'jobs.json'),
+    run: runJob,
+    busy: () => scanning,
+    notify: (e) => {
+      try { if (Notification.isSupported()) new Notification({ title: 'RoarKit', body: e.text || jt('fail', { a: '' }), silent: !prefs.sound }).show() } catch { /* no notifications */ }
+      try { win?.webContents.send('twin:jobs', jobs.get()) } catch { /* no window */ }
+    },
+  })
+  // a job missed while RoarKit was closed runs soon after the start, then each on its time
+  setTimeout(() => jobs.tick(), 20e3)
+  setInterval(() => jobs.tick(), 60e3)
+}
+ipcMain.handle('twin:jobs', () => jobs?.get() || null)
+ipcMain.handle('twin:jobs-set', (_e, cfg) => jobs?.set(cfg || {}) || null)
+ipcMain.handle('twin:jobs-run', async (_e, id) => { await jobs?.runNow(String(id)); return jobs?.get() || null })
+ipcMain.handle('twin:tray', () => trayOn())
+
+/* the menu bar (tray.js): open the window, on a tool when one is asked */
+let tray = null
+function showApp(tool) {
+  if (!win) open()
+  if (win.isMinimized()) win.restore()
+  win.show(); win.focus()
+  if (tool) { const go = () => send('go:' + tool); if (win.webContents.isLoading()) win.webContents.once('did-finish-load', go); else go() }
+}
+
 ipcMain.handle('twin:has-ffmpeg', () => { const p = ffmpegPath(); return !!p && fs.existsSync(p) })
 
 if (!app.requestSingleInstanceLock()) app.quit()
-app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
+app.on('second-instance', () => showApp(''))
 /* RoarKit can update itself only where it may replace itself: in Applications, not opened straight from the .dmg
    or from Downloads (macOS runs those from a hidden read-only copy). There the update used to open the new .dmg
    instead, so it had to be installed by hand every time (Alex, 24 Oct: "make it update by itself"). Started from
@@ -408,7 +492,11 @@ app.whenReady().then(() => {
   open()
   updater.start(ipcMain, () => { quitting = true })
   watchVolumes(); setInterval(watchVolumes, 3000)
+  startJobs()
+  tray = trayMod.create({ open: showApp, lang: () => prefs.lang })
+  if (trayOn()) tray.show(true)
   app.on('activate', () => { if (!win) open() })
 })
 app.on('before-quit', () => { quitting = true; stopNow = true })
-app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit() })
+// with the menu bar icon on, Windows keeps RoarKit running in the notification area (its jobs go on)
+app.on('window-all-closed', () => { if (process.platform !== 'darwin' && !tray?.on()) app.quit() })

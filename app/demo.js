@@ -38,9 +38,10 @@ const SAMPLE = {
       { path: '/Users/alex/Downloads/ilie mou.mp3', name: 'ilie mou.mp3', dir: '/Users/alex/Downloads', size: 8.6e6, mtime: day(5), audio: { dur: 214.7, codec: 'mp3', rate: 44100, kbps: 320 }, keep: false },
     ] },
     { id: 'g8', kind: 'photo', files: [
-      { path: '/Users/alex/Pictures/BTS/DSC_0412.jpg', name: 'DSC_0412.jpg', dir: '/Users/alex/Pictures/BTS', size: 11e6, mtime: day(14), dims: { w: 6000, h: 4000 }, thumb: pic('#2a1b3d', '#09060f', '#e0b3ff'), keep: true },
-      { path: '/Users/alex/Pictures/BTS/DSC_0413.jpg', name: 'DSC_0413.jpg', dir: '/Users/alex/Pictures/BTS', size: 10.8e6, mtime: day(14), dims: { w: 6000, h: 4000 }, thumb: pic('#2a1b3d', '#09060f', '#d9a8ff'), keep: false },
-      { path: '/Users/alex/Desktop/bts for insta.jpg', name: 'bts for insta.jpg', dir: '/Users/alex/Desktop', size: 1.2e6, mtime: day(16), dims: { w: 1080, h: 720 }, thumb: pic('#2a1b3d', '#09060f', '#e0b3ff'), keep: false },
+      { path: '/Users/alex/Pictures/BTS/DSC_0412.jpg', name: 'DSC_0412.jpg', dir: '/Users/alex/Pictures/BTS', size: 11e6, mtime: day(14), dims: { w: 6000, h: 4000 }, sharp: 412.6, thumb: pic('#2a1b3d', '#09060f', '#e0b3ff'), keep: true },
+      { path: '/Users/alex/Pictures/BTS/DSC_0413.jpg', name: 'DSC_0413.jpg', dir: '/Users/alex/Pictures/BTS', size: 10.8e6, mtime: day(14), dims: { w: 6000, h: 4000 }, sharp: 131.2, thumb: pic('#2a1b3d', '#09060f', '#d9a8ff'), keep: false },
+      { path: '/Users/alex/Pictures/BTS/DSC_0414.NEF', name: 'DSC_0414.NEF', dir: '/Users/alex/Pictures/BTS', size: 24.6e6, mtime: day(14), dims: { w: 6000, h: 4000 }, sharp: 398.1, thumb: pic('#2a1b3d', '#09060f', '#e8c2ff'), keep: false },
+      { path: '/Users/alex/Desktop/bts for insta.jpg', name: 'bts for insta.jpg', dir: '/Users/alex/Desktop', size: 1.2e6, mtime: day(16), dims: { w: 1080, h: 720 }, sharp: 380.4, thumb: pic('#2a1b3d', '#09060f', '#e0b3ff'), keep: false },
     ] },
     { id: 'g9', kind: 'orphan', files: [
       { path: '/Users/alex/Projects/Old edit/Proxy/B002_C014_Proxy.mov', name: 'B002_C014_Proxy.mov', dir: '/Users/alex/Projects/Old edit/Proxy', size: 640e6, mtime: day(1), video: V(960, 540, 41, 'prores'), thumb: pic('#123', '#000', '#7cf'), keep: false, proxy: true },
@@ -51,12 +52,38 @@ const SAMPLE = {
     ] },
   ],
 }
+/* the version shown in a browser: the one in package.json (test/version.test.js keeps the two the same) */
+export const VERSION = '0.5.0'
+/* Do by itself in a browser: the jobs as Settings shows them, with a few runs in the log */
+function demoJobs() {
+  const D = (d, h = 10) => { const x = new Date(); x.setDate(x.getDate() - d); x.setHours(h, 0, 0, 0); return x.getTime() }
+  const nextDay = (wd, h) => { const x = new Date(); x.setHours(h, 0, 0, 0); x.setDate(x.getDate() + ((wd - x.getDay() + 7) % 7 || 7)); return x.getTime() }
+  const nextMonth = (day, h) => { const x = new Date(); const n = new Date(x.getFullYear(), x.getMonth() + (x.getDate() >= day ? 1 : 0), day, h, 0); return n.getTime() }
+  let j = {
+    config: { clean: { on: true, every: 'week', day: 0, time: '10:00' }, backup: { on: true, every: 'month', day: 1, time: '11:00', folders: ['/Volumes/SHUTTLE_1/Fakinos', '/Volumes/ARCHIVE_2025/Panic Records'] } },
+    running: null, last: {},
+    log: [
+      { job: 'clean', at: D(4), ok: true, why: 'time', freed: 18.4e9, files: 2140, skipped: ['Adobe Premiere Pro'] },
+      { job: 'backup', at: D(28, 11), ok: false, why: 'missed', problem: true, folders: [{ folder: '/Volumes/SHUTTLE_1/Fakinos', total: 412, safe: 412, changed: 0, gone: 0 }, { folder: '/Volumes/ARCHIVE_2025/Panic Records', error: 'gone' }] },
+      { job: 'clean', at: D(11), ok: true, why: 'time', freed: 9.1e9, files: 880, skipped: [] },
+    ],
+  }
+  const view = () => ({ ...structuredClone(j), next: { clean: j.config.clean.on ? nextDay(j.config.clean.day, +j.config.clean.time.slice(0, 2)) : 0, backup: j.config.backup.on ? nextMonth(j.config.backup.day, +j.config.backup.time.slice(0, 2)) : 0 } })
+  return {
+    get: async () => view(),
+    set: async (cfg) => { for (const k of Object.keys(cfg || {})) j.config[k] = { ...j.config[k], ...cfg[k] }; return view() },
+    run: async (id) => { await new Promise((r) => setTimeout(r, 600)); j.log.unshift(id === 'clean' ? { job: 'clean', at: Date.now(), ok: true, why: 'now', freed: 2.2e9, files: 310, skipped: [] } : { job: 'backup', at: Date.now(), ok: true, why: 'now', folders: j.config.backup.folders.map((f) => ({ folder: f, total: 300, safe: 300, changed: 0, gone: 0 })) }); return view() },
+    on: () => () => {},
+  }
+}
 export function demoTwin() {
   let stop = false, listeners = []
   const wait = (ms) => new Promise((r) => setTimeout(r, ms))
   return {
     platform: 'web',
-    version: async () => '0.1.0',
+    version: async () => VERSION,
+    jobs: demoJobs(),
+    trayOn: async () => true,
     pick: async () => ['/Volumes/SHOOT_01', '/Volumes/BACKUP'],
     pathOf: (f) => f.name,
     isFolder: async () => true,

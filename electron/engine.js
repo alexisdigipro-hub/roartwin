@@ -253,12 +253,12 @@ async function similar(bin, videos, tick, stop) {
 }
 
 /* the one to keep: one in a Masters folder first; then for the same video the biggest picture, then the most data; for
-   a part, the full video; for photos the most pixels; for sound the most data (WAV over MP3); for exact copies and
+   a part, the full video; for photos the most pixels, then the sharpest, then the newest; for sound the most data (WAV over MP3); for exact copies and
    folders, the oldest */
 function suggest(g, kind) {
   const score = (f) => [f.protected ? 1 : 0, ...(kind === 'similar' ? [(f.video?.w || 0) * (f.video?.h || 0), f.size, -f.mtime]
     : kind === 'part' ? [f.video?.dur || 0, f.size, 0]
-    : kind === 'photo' ? [(f.dims?.w || 0) * (f.dims?.h || 0), f.size, -f.mtime]
+    : kind === 'photo' ? [(f.dims?.w || 0) * (f.dims?.h || 0), f.sharp || 0, f.mtime]
     : kind === 'sound' ? [f.size, -f.mtime, 0]
     : [-f.mtime, -f.path.length, 0])]
   let best = g[0]
@@ -370,20 +370,157 @@ async function parts(bin, videos, tick, stop) {
 }
 
 /* ---------- similar photos ---------- */
-/* Each picture shrunk to a 9x8 fingerprint: the same photo saved again, resized or re-compressed, and shots of a burst
-   that are nearly alike come out within a few bits of each other. Pictures of another shape are never alike. */
+/* Similar photos (Alex, 29 Oct: burst shots and near-identical stills, RAW and HEIC too). Each picture is read once by
+   ffmpeg as a 64x64 grey square, and two 64-bit fingerprints come out of it: a difference hash (9x8: is each cell
+   brighter than the next) and a perceptual hash (the low frequencies of a 32x32 DCT against their median). The same
+   photo saved again, resized or re-compressed, and the shots of a burst that are nearly alike, come out within a few
+   bits of each other on both; another photo comes out about half different. Pictures of another shape are never alike.
+   A camera RAW is read through the JPEG preview the camera put inside it; a HEIC that ffmpeg cannot read is read
+   through the Mac's own sips. Of each group the one kept is the most pixels, then the sharpest (the spread of a
+   Laplacian over a 1024-pixel grey frame), then the newest. */
+const RAW = new Set(['dng', 'cr2', 'cr3', 'crw', 'nef', 'nrw', 'arw', 'srf', 'sr2', 'raf', 'orf', 'rw2', 'pef', 'srw', 'x3f', '3fr', 'iiq', 'erf', 'kdc', 'mos', 'mrw', 'raw'])
+const HEIC = new Set(['heic', 'heif'])
+const isRaw = (f) => RAW.has(extOf(f))
+// what Similar photos looks at: the pictures ffmpeg reads, the HEICs and the RAWs (not PSD or AVIF)
+const isStill = (f) => isImage(f) || HEIC.has(extOf(f)) || isRaw(f)
+
+/* the biggest viewable JPEG inside a file (a RAW's preview): every JPEG start is followed marker by marker to its end;
+   lossless JPEGs (a RAW's sensor data, SOF3/7/11/15) are no picture and are left out. -> { start, end, w, h } or null */
+function largestJpeg(buf) {
+  let best = null
+  const n = buf.length
+  for (let i = buf.indexOf(Buffer.from([0xff, 0xd8, 0xff])); i >= 0 && i < n - 4; i = buf.indexOf(Buffer.from([0xff, 0xd8, 0xff]), i + 2)) {
+    let pos = i + 2, w = 0, h = 0, lossless = false, end = -1
+    walk: while (pos < n - 3) {
+      if (buf[pos] !== 0xff) break
+      let m = buf[pos + 1]
+      if (m === 0xff) { pos++; continue }
+      if (m === 0xd9) { end = pos + 2; break }
+      if ((m >= 0xd0 && m <= 0xd7) || m === 0x01) { pos += 2; continue }
+      const len = buf.readUInt16BE(pos + 2)
+      if (len < 2) break
+      if (m >= 0xc0 && m <= 0xcf && m !== 0xc4 && m !== 0xc8 && m !== 0xcc && pos + 8 < n) {
+        h = buf.readUInt16BE(pos + 5); w = buf.readUInt16BE(pos + 7)
+        if ((m & 3) === 3) lossless = true
+      }
+      pos += 2 + len
+      if (m === 0xda) {
+        // the picture's data: up to the next marker that is not a stuffed byte or a restart
+        while (pos < n - 1) {
+          if (buf[pos] !== 0xff) { pos++; continue }
+          m = buf[pos + 1]
+          if (m === 0x00 || (m >= 0xd0 && m <= 0xd7) || m === 0xff) { pos += m === 0xff ? 1 : 2; continue }
+          continue walk
+        }
+      }
+    }
+    if (end > 0 && w && h && !lossless && (!best || w * h > best.w * best.h)) best = { start: i, end, w, h }
+    if (end > 0) i = end - 2
+  }
+  return best
+}
+const READ_RAW = 96 * 1024 * 1024
+let tmpN = 0
+const tmpFile = (ext) => path.join(os.tmpdir(), `roarkit-photo-${process.pid}-${Date.now()}-${tmpN++}.${ext}`)
+/* a picture ffmpeg can read for this file: itself, or a JPEG made beside it in the temp folder (the RAW's preview, or a
+   HEIC through sips on a Mac). -> { src, w, h, done() } or null; done() takes away the temp copy (RoarKit's own) */
+async function readable(bin, f, stop) {
+  const keep = { src: f.path, w: 0, h: 0, done: () => {} }
+  if (isRaw(f.name)) {
+    let buf
+    try {
+      const fh = await fsp.open(f.path, 'r')
+      try { const size = Math.min((await fh.stat()).size, READ_RAW); buf = Buffer.alloc(size); await fh.read(buf, 0, size, 0) } finally { await fh.close() }
+    } catch { return null }
+    const j = largestJpeg(buf)
+    if (!j || j.w * j.h < 160 * 120) return null
+    const tmp = tmpFile('jpg')
+    try { await fsp.writeFile(tmp, buf.subarray(j.start, j.end)) } catch { return null }
+    return { src: tmp, w: j.w, h: j.h, done: () => fs.rm(tmp, { force: true }, () => {}) }
+  }
+  if (HEIC.has(extOf(f.name))) {
+    const { out } = await ff(bin, ['-i', f.path, '-frames:v', '1', '-vf', 'scale=8:8,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
+    if (out.length >= 64 || process.platform !== 'darwin') return keep
+    const tmp = tmpFile('jpg')
+    const ok = await new Promise((done) => { const p = spawn('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '90', f.path, '--out', tmp], { windowsHide: true }); p.on('error', () => done(false)); p.on('close', (c) => done(c === 0)) })
+    return ok ? { src: tmp, w: 0, h: 0, done: () => fs.rm(tmp, { force: true }, () => {}) } : null
+  }
+  return keep
+}
+/* a w x h grey picture shrunk to W x H by the area each cell covers */
+function boxResize(px, w, h, W, H) {
+  const out = new Float64Array(W * H), sx = w / W, sy = h / H
+  for (let Y = 0; Y < H; Y++) {
+    const y0 = Y * sy, y1 = y0 + sy
+    for (let X = 0; X < W; X++) {
+      const x0 = X * sx, x1 = x0 + sx
+      let sum = 0
+      for (let y = Math.floor(y0); y < Math.min(h, Math.ceil(y1)); y++) {
+        const wy = Math.min(y + 1, y1) - Math.max(y, y0)
+        for (let x = Math.floor(x0); x < Math.min(w, Math.ceil(x1)); x++) sum += px[y * w + x] * wy * (Math.min(x + 1, x1) - Math.max(x, x0))
+      }
+      out[Y * W + X] = sum / (sx * sy)
+    }
+  }
+  return out
+}
+/* the perceptual hash of a 64x64 grey square: the 8x8 lowest frequencies of its 32x32 DCT, each above or below their
+   median (the very lowest, the mean, left out) -> 64-bit BigInt, or null for a flat picture */
+const DCT32 = Array.from({ length: 8 }, (_, u) => Float64Array.from({ length: 32 }, (_, x) => Math.cos(((2 * x + 1) * u * Math.PI) / 64)))
+function phash(px) {
+  if (!px || px.length < 64 * 64) return null
+  const s = boxResize(px, 64, 64, 32, 32)
+  let mean = 0, sq = 0
+  for (const v of s) { mean += v; sq += v * v }
+  mean /= 1024
+  if (Math.sqrt(Math.max(0, sq / 1024 - mean * mean)) < 4) return null
+  const rows = new Float64Array(32 * 8)
+  for (let y = 0; y < 32; y++) for (let u = 0; u < 8; u++) { let a = 0; for (let x = 0; x < 32; x++) a += s[y * 32 + x] * DCT32[u][x]; rows[y * 8 + u] = a }
+  const c = new Float64Array(64)
+  for (let v = 0; v < 8; v++) for (let u = 0; u < 8; u++) { let a = 0; for (let y = 0; y < 32; y++) a += rows[y * 8 + u] * DCT32[v][y]; c[v * 8 + u] = a }
+  const med = [...c.slice(1)].sort((a, b) => a - b)[31]
+  let bits = 0n
+  for (let i = 0; i < 64; i++) bits = (bits << 1n) | (i > 0 && c[i] > med ? 1n : 0n)
+  return bits
+}
+/* the two fingerprints of a 64x64 grey square */
+function stillPrints(px) {
+  if (!px || px.length < 64 * 64) return null
+  const d = dhash(Uint8Array.from(boxResize(px, 64, 64, 9, 8), (v) => Math.round(v)))
+  const p = phash(px)
+  return d != null && p != null ? { d: split64(d), p: split64(p) } : null
+}
+/* near alike: within a few bits on both fingerprints, or nearly the same difference hash */
+const alikeStills = (a, b) => { const d = ham64(a.d, b.d), p = ham64(a.p, b.p); return d <= 5 || (d <= 12 && p <= 10) }
+/* how sharp a grey picture is: the spread (variance) of its Laplacian, the edges' strength */
+function sharpness(px, w, h) {
+  if (!px || w < 3 || h < 3 || px.length < w * h) return 0
+  let sum = 0, sq = 0, n = 0
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const i = y * w + x
+    const l = px[i - 1] + px[i + 1] + px[i - w] + px[i + w] - 4 * px[i]
+    sum += l; sq += l * l; n++
+  }
+  return n ? sq / n - (sum / n) ** 2 : 0
+}
 async function photos(bin, images, tick, stop) {
   let done = 0
   tick({ stage: 'photos', done, total: images.length })
   await pool(images, JOBS, async (f) => {
-    // a JPEG is read at an eighth of its size: twice as fast, the same fingerprint
-    const { out, log } = await ff(bin, [...(/\.jpe?g$/i.test(f.name) ? ['-lowres', '3'] : []), '-i', f.path, '-frames:v', '1', '-vf', 'scale=9:8:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
-    f.print = split64(dhash(out))
-    const v = log.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
-    f.dims = v ? { w: +v[1], h: +v[2] } : null
+    const r = await readable(bin, f, stop)
+    if (r) {
+      try {
+        // a JPEG is read at an eighth of its size: twice as fast, the same fingerprint
+        const { out, log } = await ff(bin, [...(/\.jpe?g$/i.test(r.src) ? ['-lowres', '3'] : []), '-i', r.src, '-frames:v', '1', '-vf', 'scale=64:64:flags=area,format=gray', '-f', 'rawvideo', '-'], stop, 8192)
+        f.prints = stillPrints(out)
+        const v = log.match(/Video:[^\n]*?(\d{2,5})x(\d{2,5})/)
+        // a JPEG read smaller tells its real size in the log all the same; a RAW's preview knows its own
+        f.dims = r.w ? { w: r.w, h: r.h } : v ? { w: +v[1], h: +v[2] } : null
+      } finally { r.done() }
+    }
     done++; if (done % 10 === 0 || done === images.length) tick({ stage: 'photos', done, total: images.length })
   }, stop)
-  const ok = images.filter((f) => f.print && f.dims)
+  const ok = images.filter((f) => f.prints && f.dims)
   const pairs = []
   for (let i = 0; i < ok.length; i++) {
     if (i % 500 === 0 && stop()) throw new Stopped()
@@ -391,10 +528,23 @@ async function photos(bin, images, tick, stop) {
     for (let j = i + 1; j < ok.length; j++) {
       const b = ok[j]
       if (Math.abs(ra - b.dims.w / b.dims.h) > 0.03 * ra) continue
-      if (ham64(a.print, b.print) <= 6) pairs.push([a, b])
+      if (alikeStills(a.prints, b.prints)) pairs.push([a, b])
     }
   }
-  return unite(ok, pairs)
+  const groups = unite(ok, pairs)
+  // how sharp each one of a group is, for the one to keep
+  const members = groups.flat()
+  await pool(members, JOBS, async (f) => { f.sharp = await sharpOf(bin, f, stop) }, stop)
+  return groups
+}
+async function sharpOf(bin, f, stop) {
+  const r = await readable(bin, f, stop)
+  if (!r) return 0
+  try {
+    const { out, log } = await ff(bin, ['-i', r.src, '-frames:v', '1', '-vf', "scale='min(1024,iw)':-2:flags=area,format=gray", '-f', 'rawvideo', '-'], stop, 4 << 20)
+    const m = [...log.matchAll(/Video: rawvideo[^\n]*?(\d{2,5})x(\d{2,5})/g)].pop()
+    return m ? Math.round(sharpness(out, +m[1], +m[2]) * 10) / 10 : 0
+  } finally { r.done() }
 }
 
 /* ---------- the same sound in another file ---------- */
@@ -486,14 +636,20 @@ async function sounds(bin, list, tick, stop) {
 /* a small picture of a video or an image, as a data URL: for a video the key frame nearest 40% in (three times faster
    than the exact frame, and only a preview), a JPEG read at a size still above the preview's */
 async function thumb(bin, f, stop) {
-  const w = f.dims?.w || 0
-  const low = /\.jpe?g$/i.test(f.name) ? ['-lowres', w >= 2560 ? '3' : w >= 1280 ? '2' : '1'] : []
-  const pic = (at) => ff(bin, [...at, '-i', f.path, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], stop, 400 * 1024)
-  const ss = f.video ? ['-ss', (f.video.dur * 0.4).toFixed(2)] : low
-  // no key frame after that point (a short clip with one at its start): the exact frame after all
-  let { out } = await pic(f.video ? ['-skip_frame', 'nokey', ...ss] : ss)
-  if (out.length <= 100 && f.video) out = (await pic(ss)).out
-  return out.length > 100 ? 'data:image/jpeg;base64,' + out.toString('base64') : ''
+  // a RAW through its preview, a HEIC ffmpeg cannot read through sips (Similar photos, 29 Oct)
+  const r = !f.video && (isRaw(f.name) || HEIC.has(extOf(f.name))) ? await readable(bin, f, stop) : null
+  if (!f.video && (isRaw(f.name) || HEIC.has(extOf(f.name))) && !r) return ''
+  const src = r ? r.src : f.path
+  try {
+    const w = f.dims?.w || 0
+    const low = /\.jpe?g$/i.test(src) ? ['-lowres', w >= 2560 ? '3' : w >= 1280 ? '2' : '1'] : []
+    const pic = (at) => ff(bin, [...at, '-i', src, '-frames:v', '1', '-an', '-vf', 'scale=320:-2', '-c:v', 'mjpeg', '-q:v', '6', '-f', 'image2pipe', '-'], stop, 400 * 1024)
+    const ss = f.video ? ['-ss', (f.video.dur * 0.4).toFixed(2)] : low
+    // no key frame after that point (a short clip with one at its start): the exact frame after all
+    let { out } = await pic(f.video ? ['-skip_frame', 'nokey', ...ss] : ss)
+    if (out.length <= 100 && f.video) out = (await pic(ss)).out
+    return out.length > 100 ? 'data:image/jpeg;base64,' + out.toString('base64') : ''
+  } finally { r?.done() }
 }
 
 /*
@@ -553,7 +709,7 @@ async function scan(opts, tick = () => {}, stop = () => false) {
     }
   }
   if (opts.photos !== false && opts.ffmpeg && (kind === 'all' || kind === 'image')) {
-    const images = files.filter((f) => isImage(f.name) && f.size >= 30e3 && !inExact.has(f))
+    const images = files.filter((f) => isStill(f.name) && f.size >= 30e3 && !inExact.has(f))
     for (const g of await photos(opts.ffmpeg, images, tick, stop)) {
       const all = new Set(g)
       for (const e of exactGroups) if (all.has(e[0])) e.forEach((f) => all.add(f))
@@ -586,7 +742,7 @@ async function scan(opts, tick = () => {}, stop = () => false) {
     tick({ stage: 'thumbs', done, total: all.length })
     await pool(all, JOBS, async (f) => {
       if (isVideo(f.name) && !f.video) f.video = await probe(opts.ffmpeg, f.path, stop)
-      if ((isVideo(f.name) && f.video) || isImage(f.name)) { if (!f.thumb) f.thumb = await thumb(opts.ffmpeg, f, stop) }
+      if ((isVideo(f.name) && f.video) || isStill(f.name)) { if (!f.thumb) f.thumb = await thumb(opts.ffmpeg, f, stop) }
       done++; tick({ stage: 'thumbs', done, total: all.length })
     }, stop)
   }
@@ -597,7 +753,7 @@ async function scan(opts, tick = () => {}, stop = () => false) {
       id: 'g' + i, kind: g.kind, size, free: keep ? size - keep.size : size,
       files: g.files.map((f) => ({
         path: f.path, name: f.name, dir: f.dir, size: f.size, mtime: f.mtime, video: f.video || null, thumb: f.thumb || '', keep: f === keep,
-        protected: !!f.protected, folder: !!f.folder, count: f.count || 0, partAt: f.partAt ?? null, audio: f.audio || null, dims: f.dims || null, proxy: !f.folder && isProxy(f),
+        protected: !!f.protected, folder: !!f.folder, count: f.count || 0, partAt: f.partAt ?? null, audio: f.audio || null, dims: f.dims || null, sharp: f.sharp ?? null, proxy: !f.folder && isProxy(f),
       })),
     }
   }).sort((a, b) => b.free - a.free)
@@ -841,6 +997,6 @@ async function looksLikeCard(root) {
   return false
 }
 
-module.exports = { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, soundPrint, soundDiff, isVideo, isProxy, inside,
+module.exports = { scan, backupCheck, makeTwin, recheck, looksLikeCard, readCsv, Stopped, parseProbe, parseAudio, dhash, hamming, samePictures, partAt, largestJpeg, phash, stillPrints, alikeStills, sharpness, boxResize, isStill, soundPrint, soundDiff, isVideo, isProxy, inside,
   // for the other tools (electron/tools/): the walk, ffmpeg, a preview, the kinds of file
   list, ff, probe, thumb, pool, JOBS, VIDEO, AUDIO, PHOTO, isAudio, BUNDLE, SYSTEM }

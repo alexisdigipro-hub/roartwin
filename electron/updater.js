@@ -159,4 +159,4 @@ function start(ipcMain, onQuitting, onState) {
   timer = setInterval(check, EVERY)
 }
 
-module.exports = { start, check, restart, getState: () => state, MAC_SWAP }
+module.exports = { start, check, restart, getState: () => state, MAC_SWAP, pick, newer }
