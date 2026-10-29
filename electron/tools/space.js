@@ -5,6 +5,7 @@
 const fs = require('fs')
 const fsp = fs.promises
 const path = require('path')
+const os = require('os')
 const { execFile } = require('child_process')
 const engine = require('../engine')
 
@@ -55,23 +56,36 @@ async function sizeOf(p, stop, seen) {
   return { size, mtime }
 }
 
-/* walk(root, opts, tick, stop) -> { root: node, files: [{ path, name, size, mtime, kind, bundle }], skipped }
+/* What a whole-disk start leaves out (Alex, 29 Oct: "This Mac"): other drives, macOS's own view of the same data
+   (/System/Volumes holds the Data volume again, so walking it would count every file twice), devices, swap. */
+function systemSkips(root, platform = process.platform) {
+  const r = path.resolve(root)
+  if (platform === 'darwin' && r === '/') return ['/Volumes', '/System/Volumes', '/dev', '/private/var/vm', '/cores', '/net', '/home', '/Network']
+  if (platform === 'linux' && r === '/') return ['/proc', '/sys', '/dev', '/run', '/mnt', '/media', '/snap']
+  return []
+}
+
+/* walk(root, opts, tick, stop) -> { root: node, files: [{ path, name, size, mtime, kind, bundle }], skipped, denied }
    node: { name, path, size, files, kids: [node], loose: [file], bundle } (a bundle is a file of its own, not a node)
-   opts: { skipHidden, skipCloud, cloudMounts: Set } */
+   opts: { skipHidden, skipCloud, cloudMounts: Set, skipPaths: [abs] }
+   denied: the folders that could not be read (no permission: on a Mac, Full Disk Access), so the total is never a
+   silent undercount */
 async function walk(root, opts = {}, tick = () => {}, stop = () => false) {
-  const files = [], skipped = [], seen = new Set()
+  const files = [], skipped = [], seen = new Set(), denied = []
   let n = 0, bytes = 0, last = 0
   const cloud = opts.cloudMounts || new Set()
+  const skipPaths = new Set((opts.skipPaths || []).map((x) => path.resolve(x)))
   async function dir(p, name) {
     if (stop()) throw new Stopped()
     const node = { name, path: p, size: 0, files: 0, kids: [], loose: [] }
     let d
-    try { d = await fsp.readdir(p, { withFileTypes: true }) } catch { return node } // no permission, gone
+    try { d = await fsp.readdir(p, { withFileTypes: true }) } catch (err) { if (err?.code !== 'ENOENT') denied.push(p); return node } // no permission; gone meanwhile
+    if (Date.now() - last > 150) { last = Date.now(); tick({ files: n, bytes, dir: p }) }
     for (const e of d) {
       const q = path.join(p, e.name)
       if (e.isSymbolicLink()) continue
       if (e.isDirectory()) {
-        if (SYSTEM.has(e.name)) continue
+        if (SYSTEM.has(e.name) || skipPaths.has(q)) continue
         if (opts.skipCloud && (CLOUD.test(e.name) || cloud.has(q))) { skipped.push(q); continue }
         if (opts.skipHidden && (e.name.startsWith('.') || QUIET.has(e.name))) continue
         if (BUNDLE.test(e.name)) {
@@ -100,7 +114,7 @@ async function walk(root, opts = {}, tick = () => {}, stop = () => false) {
   }
   const top = await dir(root, path.basename(root) || root)
   tick({ files: n, bytes, dir: root, done: true })
-  return { root: top, files, skipped }
+  return { root: top, files, skipped, denied }
 }
 
 /* What the page is shown of one folder: its folders by size (the biggest 120, the rest as one line) and its own
@@ -183,6 +197,21 @@ async function volumeOf(p) {
   return v
 }
 
+/* The quick starts (Alex, 29 Oct): the home folder, this computer's own drive, and every other drive in. */
+async function places(platform = process.platform) {
+  const out = { home: os.homedir(), disk: platform === 'win32' ? (process.env.SystemDrive || 'C:') + '\\' : '/', drives: [] }
+  if (platform === 'darwin') {
+    for (const e of await fsp.readdir('/Volumes', { withFileTypes: true }).catch(() => [])) {
+      // the start-up drive shows in /Volumes as a link to / (Macintosh HD): it is "This Mac" already
+      if (e.isSymbolicLink() || e.name.startsWith('.')) continue
+      out.drives.push({ name: e.name, path: path.join('/Volumes', e.name) })
+    }
+  } else if (platform === 'win32') {
+    for (const l of 'DEFGHIJKLMNOPQRSTUVWXYZ') { const d = l + ':\\'; if (d.toUpperCase() !== out.disk.toUpperCase() && fs.existsSync(d)) out.drives.push({ name: l + ':', path: d }) }
+  }
+  return out
+}
+
 /* May this path go to the Trash? Only one of the last scan's files, never in a Masters folder. */
 function mayTrash(last, p, protect) {
   if (!last || typeof p !== 'string') return false
@@ -200,14 +229,14 @@ function register(ctx) {
     try { st = fs.statSync(root) } catch { throw new Error('Choose a folder or a drive.') }
     if (!st.isDirectory()) throw new Error('Choose a folder or a drive.')
     const t0 = Date.now()
-    const r = await walk(root, { skipHidden: a.skipHidden !== false, skipCloud: a.skipCloud !== false, cloudMounts: a.skipCloud !== false ? await cloudMounts() : new Set() }, (p) => emit('space-progress', p), ctx.stopped)
+    const r = await walk(root, { skipHidden: a.skipHidden !== false, skipCloud: a.skipCloud !== false, cloudMounts: a.skipCloud !== false ? await cloudMounts() : new Set(), skipPaths: systemSkips(root) }, (p) => emit('space-progress', p), ctx.stopped)
     const protect = (Array.isArray(a.protect) ? a.protect : []).map(String)
     last = { root: r.root, files: r.files, byPath: new Map(r.files.map((f) => [f.path, f])), protect }
     const mark = (f) => ({ ...f, protected: protect.some((m) => inside(f.path, path.resolve(m))) })
     const view = nodeView(r.root)
     const big = biggest(r.files).map(mark)
     ctx.allow(root, view.kids.map((k) => k.path), view.loose.map((f) => f.path), big.map((f) => f.path))
-    return { root, took: Date.now() - t0, size: r.root.size, files: r.files.length, skipped: r.skipped, node: { ...view, loose: view.loose.map(mark) }, big, kinds: byKind(r.files), volume: await volumeOf(root) }
+    return { root, took: Date.now() - t0, size: r.root.size, files: r.files.length, skipped: r.skipped, denied: { count: r.denied.length, some: r.denied.slice(0, 12) }, hidden: a.skipHidden !== false, node: { ...view, loose: view.loose.map(mark) }, big, kinds: byKind(r.files), volume: await volumeOf(root) }
   }))
   ctx.handle('space-dir', (a) => {
     const node = last && findNode(last.root, String(a.path || ''))
@@ -230,7 +259,12 @@ function register(ctx) {
     }
     return { ok, failed }
   })
+  ctx.handle('space-places', async () => {
+    const r = await places()
+    ctx.allow(r.home, r.disk, r.drives.map((d) => d.path))
+    return r
+  })
   ctx.handle('space-export', (a) => ctx.saveText(String(a.text || ''), String(a.name || 'Space map.csv'), 'csv'))
 }
 
-module.exports = { register, walk, nodeView, findNode, byKind, biggest, largeOld, parsePlist, volumeFromPlist, parseSnapshots, mayTrash, kindOf, Stopped }
+module.exports = { register, walk, systemSkips, places, nodeView, findNode, byKind, biggest, largeOld, parsePlist, volumeFromPlist, parseSnapshots, mayTrash, kindOf, Stopped }

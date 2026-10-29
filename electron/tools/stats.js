@@ -46,9 +46,15 @@ function parseVmStat(text) {
   const page = n((s.match(/page size of (\d+) bytes/) || [])[1]) || 4096
   const get = (label) => n((s.match(new RegExp(label + ':\\s+(\\d+)')) || [])[1]) || 0
   const pages = { free: get('Pages free'), active: get('Pages active'), inactive: get('Pages inactive'), speculative: get('Pages speculative'),
-    wired: get('Pages wired down'), compressed: get('Pages occupied by compressor'), purgeable: get('Pages purgeable') }
+    wired: get('Pages wired down'), compressed: get('Pages occupied by compressor'), purgeable: get('Pages purgeable'),
+    anonymous: get('Anonymous pages'), file: get('File-backed pages') }
   if (!Object.values(pages).some(Boolean)) return null
-  return { page, ...pages, app: (pages.active + pages.wired + pages.compressed) * page, cached: (pages.inactive + pages.purgeable + pages.speculative) * page }
+  /* used as Activity Monitor counts it: the apps' own memory (anonymous pages, less what may be thrown away), wired and
+     compressed. Active pages also hold files read lately, which macOS frees at once when it needs them, so with
+     "Anonymous pages" (macOS 10.13 on) those are cached, not used; older systems fall back to active pages. */
+  const apps = pages.anonymous ? Math.max(0, pages.anonymous - pages.purgeable) : pages.active
+  const cached = pages.file ? pages.file + pages.purgeable : pages.inactive + pages.purgeable + pages.speculative
+  return { page, ...pages, app: (apps + pages.wired + pages.compressed) * page, cached: cached * page }
 }
 /* sysctl kern.memorystatus_vm_pressure_level: 1 normal, 2 warning, 4 critical */
 const parsePressure = (text) => ({ 1: 'normal', 2: 'warning', 4: 'critical' })[n(String(text).trim())] || ''
@@ -64,7 +70,7 @@ function parseSwap(text) {
 const SKIP_IF = /^(lo|utun|awdl|llw|gif|stf|anpi|ap|bridge|vmenet|ipsec|ppp|XHC)\d*/
 function parseNetstat(text) {
   let rx = 0, tx = 0
-  const cards = []
+  const cards = [], per = {}
   for (const line of String(text).split('\n').slice(1)) {
     const f = line.trim().split(/\s+/)
     if (f.length < 10 || !/^<Link#\d+>$/.test(f[2])) continue
@@ -73,14 +79,31 @@ function parseNetstat(text) {
     // the address column is empty for some cards: 11 columns with it, 10 without
     const [ib, ob] = f.length >= 11 ? [f[6], f[9]] : [f[5], f[8]]
     if (!/^\d+$/.test(ib) || !/^\d+$/.test(ob)) continue
-    rx += +ib; tx += +ob; cards.push(name)
+    if (per[name]) continue
+    rx += +ib; tx += +ob; per[name] = { rx: +ib, tx: +ob }
+    // a port with nothing on it (the Mac's Thunderbolt ports are cards too) is not named
+    if (+ib + +ob > 0) cards.push(name)
   }
-  return cards.length ? { rx, tx, cards } : null
+  return Object.keys(per).length ? { rx, tx, cards, per } : null
 }
 /* Get-NetAdapterStatistics as JSON (Windows) */
 function parseWinNet(text) {
   const a = list(json(text)).filter((x) => x && n(x.ReceivedBytes) != null)
-  return a.length ? { rx: a.reduce((s, x) => s + n(x.ReceivedBytes), 0), tx: a.reduce((s, x) => s + (n(x.SentBytes) || 0), 0), cards: a.map((x) => x.Name) } : null
+  if (!a.length) return null
+  const per = Object.fromEntries(a.map((x) => [String(x.Name), { rx: n(x.ReceivedBytes), tx: n(x.SentBytes) || 0 }]))
+  return { rx: a.reduce((s, x) => s + n(x.ReceivedBytes), 0), tx: a.reduce((s, x) => s + (n(x.SentBytes) || 0), 0), cards: a.filter((x) => n(x.ReceivedBytes) + (n(x.SentBytes) || 0) > 0).map((x) => String(x.Name)), per }
+}
+/* bytes a second between two readings, card by card: a card that came, went or started again from zero adds nothing */
+function netRate(prev, now, secs) {
+  if (!prev?.per || !now?.per || !(secs > 0)) return null
+  let down = 0, up = 0
+  for (const [k, c] of Object.entries(now.per)) {
+    const p = prev.per[k]
+    if (!p) continue
+    if (c.rx >= p.rx) down += c.rx - p.rx
+    if (c.tx >= p.tx) up += c.tx - p.tx
+  }
+  return { down: down / secs, up: up / secs }
 }
 
 /* pmset -g batt (Mac): " -InternalBattery-0 (id=…)	87%; charging; 1:23 remaining present: true" */
@@ -153,6 +176,45 @@ function parseHardware(text) {
   return { model: h.machine_name || '', modelId: h.machine_model || '', chip: h.chip_type || h.cpu_type || '', memory: h.physical_memory || '',
     cores: cores ? +cores[1] : null, perf: cores?.[2] ? +cores[2] : null, eff: cores?.[3] ? +cores[3] : null }
 }
+/* system_profiler SPDisplaysDataType -json (Mac): the graphics, and its cores on Apple silicon */
+function parseGpu(text) {
+  const g = list(json(text)?.SPDisplaysDataType).filter(Boolean)
+  if (!g.length) return null
+  return { name: g.map((x) => x.sppci_model || x._name).filter(Boolean).join(' + '), cores: n(g[0].sppci_cores) }
+}
+/* ioreg -r -d 1 -w 0 -c IOAccelerator (Mac): "Device Utilization %"=37, readable without an administrator */
+function parseGpuUse(text) {
+  const all = [...String(text).matchAll(/"Device Utilization %"\s*=\s*(\d+)/g)].map((m) => +m[1])
+  return all.length ? Math.max(...all) : null
+}
+/* the address of the card that carries the traffic, not a virtual machine's bridge or a VPN */
+function localAddress(ifaces) {
+  const all = Object.entries(ifaces || {}).flatMap(([name, a]) => (a || []).filter((x) => x && x.family === 'IPv4' && !x.internal).map((x) => ({ name, address: x.address })))
+  const real = all.find((x) => /^(en|eth|wl|wlan|Wi-?Fi|Ethernet)/i.test(x.name) && !/^(bridge|vmnet|vEthernet|utun|docker|veth)/i.test(x.name))
+  return (real || all.find((x) => !/^(bridge|vmnet|vEthernet|utun|docker|veth|tailscale|zt)/i.test(x.name)) || all[0])?.address || ''
+}
+/* "Why is it slow?" in plain words, from what the readings show; the page translates each line (its English is the key) */
+function advice(nw) {
+  const out = []
+  const add = (level, text, vars) => out.push({ level, text, vars: vars || {} })
+  const p = nw?.mem?.pressure
+  if (p === 'critical') add('bad', 'Memory is full: close a program you are not using.')
+  else if (p === 'warning') add('warn', 'Memory is under pressure: the computer is squeezing and swapping it.')
+  const swap = nw?.mem?.swap?.used || 0
+  if (swap > 8 * 1024 ** 3) add('warn', 'A lot of memory has gone to the disk ({a} GB of swap): a restart clears it.', { a: Math.round(swap / 1024 ** 3) })
+  const th = nw?.therm
+  const kernel = (nw?.top?.cpu || []).find((x) => x.name === 'kernel_task')
+  if (th?.state === 'serious' || th?.state === 'critical' || (th?.limit != null && th.limit < 100) || (kernel && kernel.cpu > 150))
+    add('bad', 'It is hot and slows itself down: give it air, keep it on a hard surface.')
+  for (const x of (nw?.top?.cpu || []).filter((x) => x.cpu >= 90 && !/^(kernel_task|WindowServer)$/.test(x.name)).slice(0, 2))
+    add('warn', '{a} is using {b}% of the processor.', { a: x.name, b: Math.round(x.cpu) })
+  const start = (nw?.drives || []).find((d) => d.mount === '/' || /^C:/i.test(d.name))
+  if (start && start.total && start.free / start.total < 0.1) add('bad', 'The start-up disk is nearly full ({a}% free): below 10% the computer slows down. Space map and Clean up free room.', { a: Math.round((start.free / start.total) * 100) })
+  if (nw?.cpu?.total != null && nw.cpu.total > 85 && !out.some((x) => x.text.includes('processor.'))) add('warn', 'The processor is busy ({a}%).', { a: Math.round(nw.cpu.total) })
+  const b = nw?.battery
+  if (b?.health != null && b.health < 80) add('warn', 'The battery holds {a}% of its first charge: worth a service.', { a: b.health })
+  return out
+}
 /* cdn-cgi/trace: key=value lines (ip, colo, loc) */
 const parseTrace = (text) => Object.fromEntries(String(text).split('\n').map((l) => l.split('=')).filter((p) => p.length >= 2).map(([k, ...v]) => [k.trim(), v.join('=').trim()]))
 
@@ -173,11 +235,25 @@ function verdict(down, up) {
   const mins = (gb, mbps) => (mbps > 0 ? (gb * 8000) / mbps / 60 : null)
   return { upload10GB: mins(10, up), download10GB: mins(10, down) }
 }
+// jitter: how much one ping differs from the one before it, in the order they were sent (sorted, it would hide it)
 const jitterOf = (ms) => (ms.length > 1 ? ms.slice(1).reduce((s, x, i) => s + Math.abs(x - ms[i]), 0) / (ms.length - 1) : 0)
+/* ping: the mean of the quickest seven of ten (the first pays for the connection); jitter over all, in their order */
+function pingOf(seq) {
+  const fast = [...seq].sort((a, b) => a - b).slice(0, Math.min(7, seq.length))
+  return { ping: fast.reduce((s, x) => s + x, 0) / (fast.length || 1), jitter: jitterOf(seq) }
+}
+/* the speed of a phase from its byte count over time: the first stretch (a connection warming up) left out */
+function rateOf(marks, warm = 1500) {
+  if (marks.length < 2) return 0
+  const t0 = marks[0].t, last = marks[marks.length - 1]
+  const from = marks.find((m) => m.t - t0 >= warm && last.t - m.t >= 500) || marks[0]
+  const secs = (last.t - from.t) / 1000
+  return secs > 0 ? ((last.bytes - from.bytes) * 8) / secs / 1e6 : 0
+}
 
 /* ---------- the live readings ---------- */
 const mac = process.platform === 'darwin', win = process.platform === 'win32'
-let lastCpu = null, lastNet = null, lastProcs = null
+let lastCpu = null, lastNet = null, lastProcs = null, lastTop = { at: 0, rows: [] }
 let slow = { at: 0 } // drives and battery: every ten seconds is enough
 let machine = null
 
@@ -185,13 +261,14 @@ async function machineInfo() {
   if (machine) return machine
   const m = { host: os.hostname(), cpu: os.cpus()[0]?.model?.trim() || '', cores: os.cpus().length, memory: os.totalmem(), arch: os.arch(), os: '', model: '', chip: '' }
   if (mac) {
-    const [hw, ver, model] = await Promise.all([run('system_profiler', ['SPHardwareDataType', '-json'], 15000), run('sw_vers', ['-productVersion']), run('sysctl', ['-n', 'hw.model'])])
+    const [hw, ver, model, gpu] = await Promise.all([run('system_profiler', ['SPHardwareDataType', '-json'], 15000), run('sw_vers', ['-productVersion']), run('sysctl', ['-n', 'hw.model']), run('system_profiler', ['SPDisplaysDataType', '-json'], 15000)])
     const h = parseHardware(hw)
-    Object.assign(m, { os: ver.trim() ? `macOS ${ver.trim()}` : 'macOS', model: h?.model || model.trim(), modelId: h?.modelId || model.trim(), chip: h?.chip || m.cpu, perf: h?.perf ?? null, eff: h?.eff ?? null })
+    Object.assign(m, { os: ver.trim() ? `macOS ${ver.trim()}` : 'macOS', model: h?.model || model.trim(), modelId: h?.modelId || model.trim(), chip: h?.chip || m.cpu, perf: h?.perf ?? null, eff: h?.eff ?? null, gpu: parseGpu(gpu) })
   } else if (win) {
     const r = json(await ps('Get-CimInstance Win32_ComputerSystem | Select-Object Manufacturer,Model | ConvertTo-Json; '))
     const o = json(await ps('(Get-CimInstance Win32_OperatingSystem).Caption | ConvertTo-Json'))
-    Object.assign(m, { os: typeof o === 'string' ? o : `Windows ${os.release()}`, model: [r?.Manufacturer, r?.Model].filter(Boolean).join(' '), chip: m.cpu })
+    const g = list(json(await ps('Get-CimInstance Win32_VideoController | Select-Object Name | ConvertTo-Json'))).map((x) => x?.Name).filter(Boolean)
+    Object.assign(m, { os: typeof o === 'string' ? o : `Windows ${os.release()}`, model: [r?.Manufacturer, r?.Model].filter(Boolean).join(' '), chip: m.cpu, gpu: g.length ? { name: g.join(' + '), cores: null } : null })
   } else Object.assign(m, { os: `${os.type()} ${os.release()}`, chip: m.cpu })
   machine = m
   return m
@@ -201,6 +278,13 @@ async function readNet() {
   if (mac) return parseNetstat(await run('netstat', ['-ibn']))
   if (win) return parseWinNet(await ps('Get-NetAdapterStatistics | Select-Object Name,ReceivedBytes,SentBytes | ConvertTo-Json'))
   return null
+}
+/* the heaviest programs: every three seconds is enough, and Windows' PowerShell is slow to start */
+async function readTop() {
+  if (Date.now() - lastTop.at < (win ? 4500 : 2500) && lastTop.at) return lastTop.rows
+  const rows = await readProcs()
+  lastTop = { at: Date.now(), rows }
+  return rows
 }
 async function readProcs() {
   if (mac) return parsePs(await run('ps', ['-Aceo', 'pid,pcpu,rss,comm']))
@@ -240,94 +324,119 @@ async function now() {
   const cpus = os.cpus()
   const cpu = cpuUse(lastCpu, cpus)
   lastCpu = cpus
-  const [m, net, procs, sl, vm, pressure, swap] = await Promise.all([
-    machineInfo(), readNet(), readProcs(), readSlow(),
+  const [m, net, procs, sl, vm, pressure, swap, gpuUse] = await Promise.all([
+    machineInfo(), readNet(), readTop(), readSlow(),
     mac ? run('vm_stat') : '', mac ? run('sysctl', ['-n', 'kern.memorystatus_vm_pressure_level']) : '', mac ? run('sysctl', ['-n', 'vm.swapusage']) : '',
+    mac ? run('ioreg', ['-r', '-d', '1', '-w', '0', '-c', 'IOAccelerator']) : '',
   ])
   const at = Date.now()
-  let rate = null
-  if (net && lastNet && at > lastNet.at) {
-    const s = (at - lastNet.at) / 1000
-    rate = { down: Math.max(0, (net.rx - lastNet.rx) / s), up: Math.max(0, (net.tx - lastNet.tx) / s) }
-  }
+  const rate = net && lastNet ? netRate(lastNet, net, (at - lastNet.at) / 1000) : null
   if (net) lastNet = { ...net, at }
   const v = parseVmStat(vm)
   const total = os.totalmem()
-  const ip = Object.values(os.networkInterfaces()).flat().find((a) => a && a.family === 'IPv4' && !a.internal)?.address || ''
-  return {
+  const out = {
     at, machine: m, uptime: os.uptime(),
     cpu: cpu || { total: null, per: cpus.map(() => 0) }, load: mac ? os.loadavg() : null,
     mem: { total, used: v ? Math.min(total, v.app) : total - os.freemem(), cached: v?.cached ?? null, pressure: parsePressure(pressure), swap: parseSwap(swap) },
-    net: { rate, ip, cards: net?.cards || [] },
+    gpu: { name: m.gpu?.name || '', cores: m.gpu?.cores ?? null, use: mac ? parseGpuUse(gpuUse) : null },
+    net: { rate, ip: localAddress(os.networkInterfaces()), cards: net?.cards || [] },
     drives: sl.drives, battery: sl.battery, therm: { state: thermalState(), ...(sl.therm || {}) },
     top: topProcs(procs),
   }
+  out.advice = advice(out)
+  return out
 }
+/* one reading at a time: a slow computer never piles readings up; a second ask waits for the one under way */
+let reading = null
+const nowOnce = () => reading || (reading = now().finally(() => { reading = null }))
 
-/* ---------- the internet speed test (Cloudflare's public endpoints) ---------- */
+/* ---------- the internet speed test (Cloudflare's public endpoints) ----------
+   Through Electron's own network (net.fetch: the computer's proxy settings count), else Node's fetch (the tests).
+   Several downloads and uploads side by side, as the big speed tests do, so a fast line is measured in full; the bytes
+   are counted as they arrive and the speed is that count over time, the warm-up left out. Every request has a
+   deadline: a line that stalls ends its phase with what it measured, instead of hanging. */
 const CF = 'https://speed.cloudflare.com'
-async function speedTest(ctx, emit) {
+const http = (() => { try { const { net } = require('electron'); return typeof net?.fetch === 'function' ? net.fetch.bind(net) : fetch } catch { return fetch } })()
+async function speedTest(ctx, emit, o = {}) {
+  const base = o.base || CF, get = o.fetch || http
+  const T = { down: 10000, up: 8000, streams: [4, 3], ...o.times }
   const stop = () => ctx.stopped()
-  const halt = () => { if (stop()) { const e = new ctx.engine.Stopped(); throw e } }
+  const halt = () => { if (stop()) throw new ctx.engine.Stopped() }
   const ctl = new AbortController()
-  const watch = setInterval(() => { if (stop()) ctl.abort() }, 200)
-  const opts = { signal: ctl.signal, cache: 'no-store' }
+  const watch = setInterval(() => { if (stop()) ctl.abort() }, 150)
+  const bust = () => `r=${Math.random().toString(36).slice(2)}`
+  const offline = () => new Error('The speed test could not reach Cloudflare. Check the internet connection; a firewall or proxy may also block it.')
   try {
     // where the test runs from, and this connection's public address
     let where = {}
-    try { where = parseTrace(await (await fetch(`${CF}/cdn-cgi/trace`, opts)).text()) } catch { halt() }
-    // latency: small requests, the time to the first answer
-    const pings = []
+    try { where = parseTrace(await (await get(`${base}/cdn-cgi/trace?${bust()}`, { signal: AbortSignal.any([ctl.signal, AbortSignal.timeout(8000)]) })).text()) } catch { halt(); throw offline() }
+    // latency: ten small requests, one after the other
+    const seq = []
     for (let i = 0; i < 10; i++) {
       halt()
       const t0 = performance.now()
-      const r = await fetch(`${CF}/__down?bytes=0`, opts); await r.arrayBuffer()
-      pings.push(performance.now() - t0)
-      emit('stats-speed-tick', { phase: 'ping', ping: Math.min(...pings), done: (i + 1) / 10 })
+      try {
+        const r = await get(`${base}/__down?bytes=0&${bust()}`, { signal: AbortSignal.any([ctl.signal, AbortSignal.timeout(5000)]) }); await r.arrayBuffer()
+      } catch (e) { halt(); if (!seq.length) throw offline(); continue }
+      seq.push(performance.now() - t0)
+      emit('stats-speed-tick', { phase: 'ping', ping: Math.min(...seq), done: (i + 1) / 10 })
     }
-    pings.sort((a, b) => a - b)
-    const ping = pings.slice(0, 7).reduce((s, x) => s + x, 0) / Math.min(7, pings.length)
-    const jitter = jitterOf(pings.slice(0, 7))
-    // download: bigger and bigger pieces for about ten seconds; the speed of the best pieces
-    const measure = async (phase, go, ms = 10000) => {
-      const t0 = performance.now(), samples = []
-      let size = 1e5
-      while (performance.now() - t0 < ms) {
-        halt()
-        const s0 = performance.now()
-        const bytes = await go(size)
-        const secs = (performance.now() - s0) / 1000
-        if (bytes && secs > 0) samples.push((bytes * 8) / secs / 1e6)
-        // pieces that take over a second are big enough
-        if (secs < 1 && size < 1e8) size = Math.min(1e8, size * 4)
-        const best = [...samples].sort((a, b) => b - a)
-        emit('stats-speed-tick', { phase, mbps: best.slice(0, 3).reduce((s, x) => s + x, 0) / Math.min(3, best.length), done: Math.min(1, (performance.now() - t0) / ms) })
+    const { ping, jitter } = pingOf(seq)
+    // a phase: `streams` workers side by side until the time is up, the bytes counted as they move
+    const phase = async (name, ms, streams, once) => {
+      const t0 = performance.now(), end = t0 + ms
+      const lane = new AbortController() // ends whatever is still under way when the time is up (plus a grace)
+      const cut = setTimeout(() => lane.abort(), ms + 4000)
+      const signal = AbortSignal.any([ctl.signal, lane.signal])
+      let bytes = 0
+      const marks = [{ t: t0, bytes: 0 }]
+      const tick = setInterval(() => {
+        marks.push({ t: performance.now(), bytes })
+        const last = marks.slice(-6)
+        const live = last.length > 1 ? ((last[last.length - 1].bytes - last[0].bytes) * 8) / ((last[last.length - 1].t - last[0].t) / 1000) / 1e6 : 0
+        emit('stats-speed-tick', { phase: name, mbps: live, done: Math.min(1, (performance.now() - t0) / ms) })
+      }, 250)
+      const worker = async () => {
+        let size = 1e6
+        try {
+          while (performance.now() < end) {
+            halt()
+            const s0 = performance.now()
+            await once(size, (b) => { bytes += b }, signal)
+            // pieces that take under a second grow, up to 100 MB
+            if (performance.now() - s0 < 1000) size = Math.min(1e8, size * 4)
+          }
+        } catch (e) { if (stop()) throw new ctx.engine.Stopped(); if (!lane.signal.aborted && !bytes) throw e }
       }
-      const best = samples.sort((a, b) => b - a).slice(0, Math.max(1, Math.ceil(samples.length / 3)))
-      return best.reduce((s, x) => s + x, 0) / best.length
+      try { await Promise.all(Array.from({ length: streams }, worker)) } finally { clearInterval(tick); clearTimeout(cut) }
+      marks.push({ t: performance.now(), bytes })
+      return rateOf(marks)
     }
-    const down = await measure('down', async (size) => {
-      const r = await fetch(`${CF}/__down?bytes=${size}`, opts)
-      let got = 0
-      for await (const c of r.body) got += c.length
-      return got
+    const down = await phase('down', T.down, T.streams[0], async (size, add, signal) => {
+      const r = await get(`${base}/__down?bytes=${size}&${bust()}`, { signal })
+      if (!r.ok) throw new Error(`Cloudflare answered ${r.status}`)
+      for await (const c of r.body) add(c.length)
     })
-    const up = await measure('up', async (size) => {
-      const body = Buffer.alloc(Math.min(size, 5e7))
-      const r = await fetch(`${CF}/__up`, { ...opts, method: 'POST', body, headers: { 'Content-Type': 'application/octet-stream' } })
+    if (!(down > 0)) throw offline()
+    const bodies = new Map()
+    const up = await phase('up', T.up, T.streams[1], async (size, add, signal) => {
+      const n = Math.min(size, 2.5e7)
+      if (!bodies.has(n)) bodies.set(n, Buffer.alloc(n, 7))
+      const r = await get(`${base}/__up?${bust()}`, { signal, method: 'POST', body: bodies.get(n), headers: { 'Content-Type': 'application/octet-stream' } })
       await r.arrayBuffer()
-      return body.length
-    }, 8000)
+      add(n)
+    })
     return { at: Date.now(), ping, jitter, down, up, ip: where.ip || '', colo: where.colo || '', loc: where.loc || '', ...verdict(down, up) }
   } catch (e) {
-    if (stop() || e?.name === 'AbortError') throw new ctx.engine.Stopped()
-    throw new Error('The speed test could not reach Cloudflare. Check the internet connection.')
+    if (stop() || e?.name === 'AbortError' && ctl.signal.aborted) throw new ctx.engine.Stopped()
+    if (e instanceof ctx.engine.Stopped) throw e
+    throw /could not reach|answered/.test(e?.message || '') ? e : offline()
   } finally { clearInterval(watch) }
 }
 
 function register(ctx) {
-  ctx.handle('stats-now', () => now())
+  ctx.handle('stats-now', () => nowOnce())
   ctx.handle('stats-speed', (_a, { emit }) => ctx.run(() => speedTest(ctx, emit)))
 }
 
-module.exports = { register, parseDf, parseWinDrives, parseVmStat, parsePressure, parseSwap, parseNetstat, parseWinNet, parseBatt, parseIoregBattery, parseWinBattery, parseTherm, parsePs, topProcs, parseHardware, parseTrace, cpuUse, verdict, jitterOf }
+module.exports = { register, speedTest, netRate, parseGpu, parseGpuUse, localAddress, advice, pingOf, rateOf, parseDf, parseWinDrives, parseVmStat, parsePressure, parseSwap, parseNetstat, parseWinNet, parseBatt, parseIoregBattery, parseWinBattery, parseTherm, parsePs, topProcs, parseHardware, parseTrace, cpuUse, verdict, jitterOf }

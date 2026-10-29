@@ -7,7 +7,7 @@ const os = require('os')
 const path = require('path')
 const zlib = require('zlib')
 const { execFileSync } = require('child_process')
-const { makeTool, findTar, kindOf, baseOf, unsafe, isJunk, freeName, parseList, makeArgs } = require('../electron/tools/archive')
+const { makeTool, findTar, kindOf, baseOf, unsafe, linkOutside, unsafeEntries, unescapeName, plainPattern, isJunk, freeName, parseList, makeArgs, writable, friendly, Stopped } = require('../electron/tools/archive')
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin-archive-'))
 const put = (rel, text) => { const f = path.join(root, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, text); return f }
@@ -120,6 +120,92 @@ t.close()`, evil])
   for (let i = 0; i < 400; i++) put(`big/f${i}.bin`, Buffer.alloc(20000, i % 251))
   await assert.rejects(tool.make([path.join(root, 'big')], { format: 'tar.xz', level: 'small', stop: () => true }), /Stopped/)
   assert.ok(!fs.existsSync(path.join(root, 'big.tar.xz')))
+
+  /* ---------- the audit of 29 Oct: each bug it found, kept found ---------- */
+  // a link inside the archive pointing outside, and a file stored through it, are left out
+  assert.ok(linkOutside('a/link', '/etc') && linkOutside('a/link', '../../x') && !linkOutside('a/b/link', '../c') && !linkOutside('l', 'clip.mov'))
+  const linked = parseList([
+    'lrwxr-xr-x  0 0      0           0 Oct 28 10:00 shoot/out -> /etc',
+    '-rw-r--r--  0 0      0           5 Oct 28 10:00 shoot/out/passwd',
+    'lrwxr-xr-x  0 0      0           0 Oct 28 10:00 shoot/latest -> A001.mov',
+    'hrw-r--r--  0 0      0           0 Oct 28 10:00 shoot/hard link to ../../secret',
+  ].join('\n'), new Date(2026, 9, 28))
+  assert.strictEqual(linked[0].target, '/etc'); assert.ok(linked[3].hard)
+  assert.deepStrictEqual(unsafeEntries(linked).sort(), ['shoot/hard', 'shoot/out', 'shoot/out/passwd'].sort())
+  const evil2 = path.join(root, 'evil2.tar')
+  execFileSync('python3', ['-c', `
+import tarfile, io, sys
+t = tarfile.open(sys.argv[1], 'w')
+l = tarfile.TarInfo('pack/escape'); l.type = tarfile.SYMTYPE; l.linkname = sys.argv[2]; t.addfile(l)
+for name, data in [('pack/escape/planted.txt', b'bad'), ('pack/fine.txt', b'fine')]:
+    i = tarfile.TarInfo(name); i.size = len(data); t.addfile(i, io.BytesIO(data))
+t.close()`, evil2, path.join(root, 'victim')])
+  fs.mkdirSync(path.join(root, 'victim'))
+  const ev2 = await tool.list(evil2)
+  assert.deepStrictEqual(ev2.unsafe.sort(), ['pack/escape', 'pack/escape/planted.txt'])
+  const got2 = await tool.extract(evil2)
+  assert.strictEqual(fs.readFileSync(path.join(got2.folder, 'pack', 'fine.txt'), 'utf8'), 'fine')
+  assert.ok(!fs.existsSync(path.join(root, 'victim', 'planted.txt')), 'nothing written through the link')
+
+  // Greek names and names with [ ] * ? come out (bsdtar reads -T as patterns; escapes from the C locale read back)
+  assert.strictEqual(unescapeName('\\316\\221\\316\\273\\316\\255\\316\\276\\316\\267\\317\\202/x.mov'), 'Αλέξης/x.mov')
+  assert.strictEqual(plainPattern('Take [1] *final?.mov'), 'Take \\[1\\] \\*final\\?.mov')
+  const odd = path.join(root, 'odd.tar')
+  execFileSync('python3', ['-c', `
+import tarfile, io, sys
+t = tarfile.open(sys.argv[1], 'w')
+for name, data in [('Γύρισμα/Λήψη [1] *τελικό*.mov', b'one'), ('../bad.txt', b'bad')]:
+    i = tarfile.TarInfo(name); i.size = len(data); t.addfile(i, io.BytesIO(data))
+t.close()`, odd])
+  const oddInfo = await tool.list(odd)
+  assert.ok(oddInfo.entries.some((e) => e.name === 'Γύρισμα/Λήψη [1] *τελικό*.mov'), oddInfo.entries.map((e) => e.name).join(' | '))
+  const oddOut = await tool.extract(odd)
+  assert.strictEqual(fs.readFileSync(path.join(oddOut.folder, 'Γύρισμα', 'Λήψη [1] *τελικό*.mov'), 'utf8'), 'one')
+
+  // a damaged archive says so, Test finds it, and nothing at all coming out leaves no empty folder
+  const whole = fs.readFileSync(made.path)
+  const cut = path.join(root, 'cut.tar.gz'); fs.writeFileSync(cut, whole.subarray(0, Math.floor(whole.length / 2)))
+  const good = await tool.test(made.path)
+  assert.ok(good.ok && good.count >= 2, JSON.stringify(good))
+  const bad = await tool.test(cut)
+  assert.ok(!bad.ok && /damaged|cut short/i.test(bad.error), JSON.stringify(bad))
+  const junkData = path.join(root, 'junk.tar.gz'); fs.writeFileSync(junkData, Buffer.alloc(4000, 7))
+  const before = fs.readdirSync(root).length
+  await assert.rejects(tool.extract(junkData))
+  assert.strictEqual(fs.readdirSync(root).length, before, 'no empty folder left behind')
+  const gzCut = path.join(root, 'cut.wav.gz'); fs.writeFileSync(gzCut, zlib.gzipSync(require('crypto').randomBytes(300000)).subarray(0, 4000))
+  assert.strictEqual((await tool.test(gzCut)).ok, false)
+  await assert.rejects(tool.extract(gzCut), /damaged|cut short|unexpected end/i)
+  assert.ok(!fs.existsSync(path.join(root, 'cut.wav')), 'the half single file went with its folder')
+
+  // Stop while opening takes away the folder the app had just made
+  const bigTar = path.join(root, 'bigone.tar'); execFileSync(tar.bin, ['-c', '-f', bigTar, '-C', root, 'big'])
+  let calls = 0
+  await assert.rejects(tool.extract(bigTar, { stop: () => ++calls >= 2 }), (e) => e instanceof Stopped)
+  assert.ok(!fs.existsSync(path.join(root, 'bigone')), 'the half folder is gone')
+
+  // a drive without room is told before anything is written
+  const tight = makeTool({ tar, platform: process.platform, freeSpace: async () => 10 })
+  await assert.rejects(tight.extract(made.path), /not room enough/)
+
+  // tar's messages in words a person can act on
+  assert.match(friendly('tar: write error: No space left on device'), /drive is full/)
+  assert.match(friendly('bsdtar: Truncated input file (needed 512 bytes, only 0 available)'), /damaged or cut short/)
+  assert.match(friendly('tar: Cannot open: Permission denied'), /may not write/)
+
+  // what each tar can make: Windows' tar.exe without liblzma makes no 7z or tar.xz
+  assert.deepStrictEqual(writable('bsd', 'bsdtar 3.5.2 - libarchive 3.5.2 zlib/1.2.5.f-ipp bz2lib/1.0.6'), ['zip', 'tar.gz'])
+  assert.deepStrictEqual(writable('bsd', 'bsdtar 3.5.3 - libarchive 3.5.3 zlib/1.2.12 liblzma/5.0.5 bz2lib/1.0.8'), ['zip', '7z', 'tar.gz', 'tar.xz'])
+  assert.deepStrictEqual(writable('gnu', 'tar (GNU tar) 1.35', (p) => p === 'gzip'), ['tar.gz'])
+  await assert.rejects(makeTool({ tar: { ...tar, formats: ['tar.gz'] }, platform: process.platform }).make([path.join(root, 'shoot')], { format: 'tar.xz' }), /cannot make that kind/)
+
+  // a ZIP with a password: AES-256 through bsdtar; only a ZIP can have one
+  const locked = makeArgs({ format: 'zip', out: '/o/A.zip', items: ['/x/a'], flavour: 'bsd', password: 'pa ss' })
+  assert.ok(locked.join(' ').includes('zip:encryption=aes256') && locked[locked.indexOf('--passphrase') + 1] === 'pa ss')
+  await assert.rejects(tool.make([path.join(root, 'shoot')], { format: 'tar.gz', password: 'x' }), /Only a ZIP/)
+
+  // how long it took
+  assert.ok(Number.isFinite(out.took) && Number.isFinite(made.took))
 
   fs.rmSync(root, { recursive: true, force: true })
   console.log('archive: all good')

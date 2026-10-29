@@ -31,18 +31,39 @@ function kindOf(name, isDir) {
 
 /* one folder's contents: links listed as links (never followed), a package (an .app, a Final Cut library) as one item */
 async function listDir(dir) {
-  const ents = await fsp.readdir(dir, { withFileTypes: true })
-  const out = []
-  for (const e of ents) {
-    if (e.name === '.DS_Store' || e.name === '.localized') continue
-    const p = path.join(dir, e.name)
-    let st
-    try { st = await fsp.lstat(p) } catch { continue }
-    const link = st.isSymbolicLink()
-    const isDir = st.isDirectory()
-    out.push({ name: e.name, path: p, dir: isDir && !PACKAGE.test(e.name), link, size: isDir ? null : st.size, mtime: st.mtimeMs, kind: link ? 'link' : kindOf(e.name, isDir), hidden: e.name.startsWith('.') })
+  const ents = (await fsp.readdir(dir, { withFileTypes: true })).filter((e) => e.name !== '.DS_Store' && e.name !== '.localized')
+  const out = new Array(ents.length)
+  // a folder of 20,000 clips: their details read 48 at a time, not one after the other (a network drive is slow)
+  let next = 0
+  const lane = async () => {
+    while (next < ents.length) {
+      const i = next++, e = ents[i], p = path.join(dir, e.name)
+      let st
+      try { st = await fsp.lstat(p) } catch { continue }
+      const link = st.isSymbolicLink()
+      const isDir = st.isDirectory()
+      out[i] = { name: e.name, path: p, dir: isDir && !PACKAGE.test(e.name), link, size: isDir ? null : st.size, mtime: st.mtimeMs, kind: link ? 'link' : kindOf(e.name, isDir), hidden: e.name.startsWith('.') }
+    }
   }
-  return out
+  await Promise.all(Array.from({ length: Math.min(48, ents.length) }, lane))
+  return out.filter(Boolean)
+}
+
+/* one rename, never over another file. Only the case changing: through a passing name (a Mac's disk sees "Clip.mov"
+   and "clip.mov" as one file), and only when the other spelling is this same file, not a second one (a case-sensitive
+   disk can hold both). */
+async function sameFile(a, b) {
+  try { const [x, y] = await Promise.all([fsp.lstat(a), fsp.lstat(b)]); return x.ino === y.ino && x.dev === y.dev } catch { return false }
+}
+async function renameSafe(from, to) {
+  if (from === to) return to
+  if (await exists(to) && !(await sameFile(from, to))) throw new Error('That name is taken.')
+  if (to.toLowerCase() === from.toLowerCase()) {
+    const tmp = await freeName(path.dirname(from), path.basename(from) + '.roartwin-rename')
+    await fsp.rename(from, tmp)
+    try { await fsp.rename(tmp, to) } catch (e) { await fsp.rename(tmp, from).catch(() => {}); throw e }
+  } else await fsp.rename(from, to)
+  return to
 }
 
 /* a free name in a folder: "Clip.mov", then "Clip 2.mov", "Clip 3.mov"… */
@@ -73,7 +94,7 @@ async function copyFile(src, target, onBytes, stop) {
   const st = await fsp.stat(src)
   const part = target + '.roartwin-part'
   await new Promise((ok, bad) => {
-    const r = fs.createReadStream(src), w = fs.createWriteStream(part, { flags: 'wx' })
+    const r = fs.createReadStream(src), w = fs.createWriteStream(part, { flags: 'w' })
     const fail = (e) => { r.destroy(); w.destroy(); fsp.rm(part, { force: true }).finally(() => bad(e)) }
     r.on('data', (c) => { if (stop?.()) return fail(new Stopped()); onBytes?.(c.length) })
     r.on('error', fail); w.on('error', fail); w.on('finish', ok)
@@ -83,9 +104,10 @@ async function copyFile(src, target, onBytes, stop) {
   await fsp.rename(part, target)
   await fsp.utimes(target, st.atime, st.mtime).catch(() => {})
 }
-async function copyItem(src, destDir, onBytes, stop) {
+async function copyItem(src, destDir, onBytes, stop, made) {
   const st = await fsp.lstat(src)
   const target = await freeName(destDir, path.basename(src))
+  made?.(target)
   if (st.isSymbolicLink()) { await fsp.symlink(await fsp.readlink(src), target); return target }
   if (st.isDirectory()) {
     await fsp.mkdir(target)
@@ -106,17 +128,23 @@ async function transfer({ paths, to, move }, { onProgress, stop, trash } = {}) {
   const ok = [], failed = []
   for (const src of paths) {
     if (stop?.()) throw new Stopped()
+    // the copy being made now: on Stop, or when it breaks off, what was half made of it goes to the Trash (a whole
+    // folder half copied, not only a half file), so nothing incomplete is left looking like the original
+    let making = ''
+    const half = async () => { if (making && trash && await exists(making)) await trash(making).catch(() => {}) }
     try {
       if (inside(path.resolve(to), path.resolve(src))) throw new Error('A folder cannot go inside itself.')
       if (move) {
         if (path.resolve(path.dirname(src)) === path.resolve(to)) { ok.push(src); continue }
         const target = await freeName(to, path.basename(src))
         try { await fsp.rename(src, target); tick(await sizeOf(target)); ok.push(target); continue } catch (e) { if (e.code !== 'EXDEV') throw e }
-        const copied = await copyItem(src, to, tick, stop)
+        const copied = await copyItem(src, to, tick, stop, (t) => { making = t })
+        making = ''
         if (trash) await trash(src)
         ok.push(copied)
-      } else ok.push(await copyItem(src, to, tick, stop))
+      } else { ok.push(await copyItem(src, to, tick, stop, (t) => { making = t })); making = '' }
     } catch (e) {
+      await half()
       if (e instanceof Stopped) throw e
       failed.push({ path: src, error: String(e?.message || e) })
     }
@@ -347,7 +375,8 @@ const mdlsOf = (p) => new Promise((done) => {
 /* ---------- the doors ---------- */
 function register(ctx) {
   const opened = new Set() // folders the person opened in a pane; everything acted on is inside one
-  const allowed = (p) => [...opened].some((r) => inside(p, r))
+  const dropped = new Set() // files and folders dragged in from the Finder: those exact ones may be copied or moved in
+  const allowed = (p) => dropped.has(p) || [...opened].some((r) => inside(p, r))
   const must = (p) => {
     const r = path.resolve(String(p || ''))
     if (!p || !allowed(r)) throw new Error('That is not in a folder opened here.')
@@ -442,11 +471,7 @@ function register(ctx) {
     if (!n) throw new Error('Give it a name.')
     const target = path.join(path.dirname(r), n)
     if (target === r) return r
-    // only its case changes: through a passing name (a Mac's disk sees both as one)
-    if (target.toLowerCase() === r.toLowerCase()) { const tmp = r + '.roartwin-rename'; await fsp.rename(r, tmp); await fsp.rename(tmp, target) } else {
-      if (await exists(target)) throw new Error('That name is taken.')
-      await fsp.rename(r, target)
-    }
+    await renameSafe(r, target)
     ctx.allow?.(target)
     return target
   })
@@ -472,6 +497,36 @@ function register(ctx) {
     }
     return { ok, failed }
   })
+  // what the person dragged in from the Finder (or the desktop) onto a pane
+  ctx.handle('files-dropped', async ({ paths }) => {
+    const ok = []
+    for (const p of Array.isArray(paths) ? paths : []) { const r = path.resolve(String(p || '')); if (p && await exists(r)) { dropped.add(r); ok.push(r) } }
+    return ok
+  })
+  // a large picture of a file for the preview: on a Mac Quick Look's own (RAW, HEIC, PSD, PDF, a video's frame), else ffmpeg's
+  ctx.handle('files-picture', async ({ path: p }) => {
+    const r = must(p)
+    if (process.platform === 'darwin') {
+      const dir = await fsp.mkdtemp(path.join(require('os').tmpdir(), 'roarkit-ql-'))
+      try {
+        await new Promise((done) => execFile('qlmanage', ['-t', '-s', '1600', '-o', dir, r], { timeout: 15000 }, () => done()))
+        const png = (await fsp.readdir(dir)).find((n) => n.endsWith('.png'))
+        if (png) return 'data:image/png;base64,' + (await fsp.readFile(path.join(dir, png))).toString('base64')
+      } finally { await fsp.rm(dir, { recursive: true, force: true }) } // the app's own temporary folder
+    }
+    if (!bin() || !['image', 'video'].includes(kindOf(r, false))) return ''
+    const f = { path: r, name: path.basename(r) }
+    if (kindOf(r, false) === 'video') { f.video = await ctx.engine.probe(bin(), r, () => false); if (!f.video) return '' }
+    const { out } = await ctx.engine.ff(bin(), [...(f.video ? ['-ss', (f.video.dur * 0.4).toFixed(2)] : []), '-i', r, '-frames:v', '1', '-an', '-vf', 'scale=1600:-2', '-c:v', 'mjpeg', '-q:v', '4', '-f', 'image2pipe', '-'], () => false, 4 << 20, 20e3)
+    return out.length > 100 ? 'data:image/jpeg;base64,' + out.toString('base64') : ''
+  })
+  // the Mac's own Quick Look window: a video plays there, with sound
+  ctx.handle('files-quicklook', async ({ path: p }) => {
+    const r = must(p)
+    if (process.platform !== 'darwin') { await ctx.shell.openPath(r); return false }
+    require('child_process').spawn('qlmanage', ['-p', r], { detached: true, stdio: 'ignore' }).unref()
+    return true
+  })
   ctx.handle('files-template', async ({ path: p, names }) => makeTemplate(must(p), Array.isArray(names) ? names : []))
   ctx.handle('files-compare', async ({ left, right }) => {
     const a = must(left), b = must(right)
@@ -479,4 +534,4 @@ function register(ctx) {
   })
 }
 
-module.exports = { register, listDir, freeName, transfer, compare, makeTemplate, parseInfo, parseMdls, sectionsOf, textOf, splitTop, kindOf, inside, cleanName, sizeOf }
+module.exports = { register, listDir, freeName, renameSafe, sameFile, transfer, compare, makeTemplate, parseInfo, parseMdls, sectionsOf, textOf, splitTop, kindOf, inside, cleanName, sizeOf }

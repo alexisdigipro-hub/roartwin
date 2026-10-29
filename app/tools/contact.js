@@ -1,25 +1,25 @@
 // Contact sheet (Alex, 28 Oct): a frame (or three) of every clip of a folder in a grid, with its name, length and
 // timecode, saved as a PDF to send to a client or the editor. Through electron/tools/media.js (contact-scan, contact-pdf).
-import { EL_SHARED, folderBox, progressEl, runJob, demoRun, SAMPLE_CLIPS } from './report.js'
+import { EL_SHARED, folderBox, progressEl, runJob, demoRun, SAMPLE_CLIPS, PAGE, moreEl } from './report.js'
 
-const st = { root: '', res: null, busy: false, p: null, frames: 1, cols: 4, landscape: true }
+const st = { root: '', res: null, busy: false, p: null, frames: 1, cols: 4, landscape: true, photos: false, title: '', shown: PAGE }
 let loaded = false
 const load = (ctx) => {
   if (loaded) return
   loaded = true
-  st.root = ctx.load('contact', 'root', ''); st.frames = ctx.load('contact', 'frames', 1); st.cols = ctx.load('contact', 'cols', 4); st.landscape = ctx.load('contact', 'landscape', true)
+  st.root = ctx.load('contact', 'root', ''); st.frames = ctx.load('contact', 'frames', 1); st.cols = ctx.load('contact', 'cols', 4); st.landscape = ctx.load('contact', 'landscape', true); st.photos = ctx.load('contact', 'photos', false)
 }
 const setOpt = (ctx, k, v) => { st[k] = v; ctx.save('contact', k, v); ctx.draw() }
 
 async function start(ctx) {
   if (!st.root) return
-  const r = await runJob(ctx, st, 'contact-scan', { root: st.root, frames: st.frames, skipHidden: ctx.S.opts.skipHidden }, 'contact-progress')
-  if (r) { st.res = r; if (!r.clips.length) ctx.toast(ctx.t('No clips in this folder.')) }
+  const r = await runJob(ctx, st, 'contact-scan', { root: st.root, frames: st.frames, photos: st.photos, skipHidden: ctx.S.opts.skipHidden }, 'contact-progress')
+  if (r) { st.res = r; st.shown = PAGE; st.title = ''; if (!r.clips.length) ctx.toast(ctx.t('No clips in this folder.')) }
   ctx.draw()
 }
 async function savePDF(ctx) {
   const t = ctx.t
-  try { if (await ctx.call('contact-pdf', { cols: st.cols, landscape: st.landscape, words: { title: t('Contact sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
+  try { if (await ctx.call('contact-pdf', { id: st.res?.id, cols: st.cols, landscape: st.landscape, title: st.title.trim(), locale: ctx.S.lang === 'el' ? 'el-GR' : 'en-GB', words: { title: t('Contact sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 
 export default {
@@ -34,6 +34,8 @@ export default {
     'Columns': 'Στήλες', 'How many clips across the page.': 'Πόσα clips σε κάθε σειρά.', 'Page': 'Σελίδα', 'Landscape': 'Οριζόντια', 'Portrait': 'Κάθετη', 'How the PDF is turned.': 'Πώς γυρίζει το PDF.',
     'Make the sheet': 'Φτιάξε το sheet', 'Taking the frames': 'Παίρνει τα καρέ', 'Nothing is changed: RoarKit only reads the clips.': 'Τίποτα δεν αλλάζει: το RoarKit μόνο διαβάζει τα clips.',
     'Save PDF': 'Αποθήκευση PDF', 'New sheet': 'Νέο sheet', '{n} clips': '{n} clips',
+    'A title for the PDF (else Contact sheet)': 'Τίτλος για το PDF (αλλιώς Contact sheet)', 'Title': 'Τίτλος',
+    'The PDF holds every clip; the screen shows them a page at a time.': 'Το PDF έχει όλα τα clips· η οθόνη τα δείχνει σελίδα σελίδα.',
   },
   top(ctx) {
     const { h, t, ico, seg } = ctx
@@ -52,11 +54,14 @@ export default {
     load(ctx)
     if (st.busy) return progressEl(ctx, st, t('Taking the frames'))
     if (st.res) {
+      const page = st.res.clips.slice(0, st.shown)
       return h('main', {}, h('div', { class: 'res' },
-        h('div', { class: 'cs-grid', style: { '--cols': String(st.cols) } }, ...st.res.clips.map((c) => h('figure', { class: 'cs-t' },
+        st.res.clips.length ? h('div', { class: 'cs-head' }, h('input', { class: 'cs-title', value: st.title, placeholder: t('A title for the PDF (else Contact sheet)'), 'aria-label': t('Title'), oninput: (e) => { st.title = e.target.value } }),
+          st.res.clips.length > page.length ? h('small', { class: 'cs-note' }, t('The PDF holds every clip; the screen shows them a page at a time.')) : null) : h('p', { class: 'note' }, t('No clips in this folder.')),
+        h('div', { class: 'cs-grid', style: { '--cols': String(st.cols) } }, ...page.map((c) => h('figure', { class: 'cs-t' },
           h('div', { class: 'cs-fr', style: { '--n': String(Math.max(1, c.frames.length)) } }, ...(c.frames.length ? c.frames : ['']).map((f) => h('div', { class: 'cs-img', style: f ? { backgroundImage: `url("${f}")` } : null }))),
-          h('figcaption', {}, h('b', { title: c.name }, c.name), h('small', {}, [c.dur != null ? dur(c.dur) : '', c.tc ? 'TC ' + c.tc : ''].filter(Boolean).join(' · ')))))),
-      ))
+          h('figcaption', {}, h('b', { title: c.name }, c.name), h('small', {}, [c.dur != null ? dur(c.dur) : '', c.tc ? 'TC ' + c.tc : '', c.res || ''].filter(Boolean).join(' · ')))))),
+        moreEl(ctx, st, st.res.clips.length - page.length)))
     }
     const opt = (title, sub, control) => h('div', { class: 'opt' }, h('span', {}, h('b', {}, title), h('small', {}, sub)), control)
     return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card' },
@@ -66,7 +71,8 @@ export default {
       h('div', { class: 'opts' },
         opt(t('Frames'), t('One or three frames of each clip.'), seg([[1, t('One')], [3, t('Three')]], st.frames, (v) => setOpt(ctx, 'frames', v))),
         opt(t('Columns'), t('How many clips across the page.'), seg([[3, '3'], [4, '4'], [6, '6']], st.cols, (v) => setOpt(ctx, 'cols', v))),
-        opt(t('Page'), t('How the PDF is turned.'), seg([[true, t('Landscape')], [false, t('Portrait')]], st.landscape, (v) => setOpt(ctx, 'landscape', v)))),
+        opt(t('Page'), t('How the PDF is turned.'), seg([[true, t('Landscape')], [false, t('Portrait')]], st.landscape, (v) => setOpt(ctx, 'landscape', v))),
+        opt(t('Photos too'), t('Pictures from cameras and phones as well: their size and a frame.'), ctx.switchEl(st.photos, (v) => setOpt(ctx, 'photos', v), t('Photos too')))),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => start(ctx) }, ico('grid'), t('Make the sheet'))),
       h('p', { class: 'note' }, t('Nothing is changed: RoarKit only reads the clips.')))))
   },
@@ -74,7 +80,7 @@ export default {
     'contact-scan': async ({ root, frames }, emit) => {
       const clips = SAMPLE_CLIPS.filter((c) => c.video)
       await demoRun('contact-progress', clips.length, emit)
-      return { root, took: 3100, clips: clips.map((c) => ({ ...c, frames: Array(Number(frames) === 3 ? 3 : 1).fill(c.thumb) })) }
+      return { id: 'demo-' + Date.now(), root, took: 3100, clips: clips.map((c) => ({ ...c, res: `${c.video.w}×${c.video.h}`, frames: Array(Number(frames) === 3 ? 3 : 1).fill(c.thumb) })) }
     },
     'contact-pdf': async () => '/Users/alex/Desktop/Contact sheet CARD_A.pdf',
   },

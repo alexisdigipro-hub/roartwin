@@ -1,0 +1,195 @@
+/* RoarKit's look, second edition (Alex, 29 Oct: "it looks like a cheap app: a fresher design, animation when you
+   change tab, on the buttons and the rest"). Loaded last, over styles.css and the tools' own sheets: it changes how
+   things look and move, never what they do. Light and dark both through the tokens of styles.css. */
+
+:root {
+  --font-display: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI Variable Display', 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --spring: cubic-bezier(.34, 1.4, .5, 1);
+  --soft: cubic-bezier(.2, .8, .2, 1);
+  --r-card: 22px; --r-tile: 16px;
+  --lift: 0 1px 0 rgba(255,255,255,.06) inset, 0 1px 2px rgba(0,0,0,.25), 0 8px 24px rgba(0,0,0,.22);
+}
+html[data-theme="light"] { --lift: 0 1px 0 rgba(255,255,255,.9) inset, 0 1px 2px rgba(20,24,40,.06), 0 8px 24px rgba(20,24,40,.07); }
+
+/* ---------- the window: the side menu is the Mac's own frosted glass; the page is the column ---------- */
+html.mac, html.mac body { background: transparent; }
+html.mac .side { background: color-mix(in srgb, var(--bg) 28%, transparent); }
+html.mac[data-theme="light"] .side { background: color-mix(in srgb, #fff 30%, transparent); }
+.col { position: relative; background: var(--bg); isolation: isolate; }
+.col::before { content: ''; position: absolute; inset: 0 0 auto; height: 360px; z-index: -1; pointer-events: none;
+  background: radial-gradient(55% 100% at 30% 0%, var(--glow), transparent 72%), radial-gradient(40% 80% at 85% 0%, color-mix(in srgb, var(--acc) 5%, transparent), transparent 70%); }
+body::before { display: none; }
+
+/* ---------- the side menu ---------- */
+.side { gap: 4px; padding: 0 12px 12px; border-right: 1px solid var(--line); }
+.side .wm { height: 60px; font-size: 16px; letter-spacing: .08em; }
+.side .wm b { background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #ffb36b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.side-list { position: relative; gap: 12px; padding: 2px 0 8px; }
+.side-g { gap: 1px; }
+.side-g small { padding: 0 10px 3px; font-size: 10.5px; letter-spacing: .09em; }
+.nav { position: relative; z-index: 1; height: 32px; gap: 10px; padding: 0 8px; border: 0; border-radius: 10px; color: var(--text); opacity: .86; font-weight: 500; transition: opacity .2s, background .2s, transform .2s var(--spring); }
+.nav:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); opacity: 1; }
+.nav:active:not(:disabled) { transform: scale(.97); }
+.nav.on { background: none; border: 0; box-shadow: none; opacity: 1; font-weight: 600; }
+.nav.on svg { color: #fff; }
+/* the glass under the chosen tool, gliding between them (app.js placeLens) */
+.side-lens { position: absolute; left: 0; right: 0; top: 0; z-index: 0; border-radius: 10px; opacity: 0; pointer-events: none;
+  background: color-mix(in srgb, var(--text) 9%, transparent); box-shadow: inset 0 1px 0 var(--hi), 0 1px 2px rgba(0,0,0,.12);
+  transition: transform .42s var(--spring), height .3s var(--soft), opacity .2s; }
+html[data-theme="light"] .side-lens { background: rgba(255,255,255,.85); box-shadow: 0 1px 2px rgba(20,24,40,.1), 0 4px 12px rgba(20,24,40,.06); }
+.side-foot .nav.on { background: color-mix(in srgb, var(--text) 9%, transparent); }
+
+/* a coloured tile for each tool, as in System Settings */
+.tile-ic { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: #fff;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--t, #8e8e93) 78%, #fff), var(--t, #8e8e93)); box-shadow: inset 0 0 0 .5px rgba(0,0,0,.12), 0 1px 1.5px rgba(0,0,0,.18); }
+.tile-ic svg { width: 14px; height: 14px; stroke-width: 2; }
+[data-tool="home"] { --t: #ff453a; }
+[data-tool="space"] { --t: #bf5af2; } [data-tool="clean"] { --t: #30b0c7; } [data-tool="leftovers"] { --t: #ac8e68; } [data-tool="twins"] { --t: #ff9f0a; }
+[data-tool="copy"] { --t: #34c759; } [data-tool="backup"] { --t: #0a84ff; } [data-tool="report"] { --t: #5e5ce6; } [data-tool="clipcheck"] { --t: #ff375f; }
+[data-tool="contact"] { --t: #ff6b2c; } [data-tool="rename"] { --t: #64d2ff; }
+[data-tool="files"] { --t: #1e90ff; } [data-tool="archive"] { --t: #a2845e; }
+[data-tool="drives"] { --t: #8e8e93; } [data-tool="speed"] { --t: #ffcc00; } [data-tool="stats"] { --t: #32d74b; } [data-tool="vault"] { --t: #636366; }
+[data-tool="settings"] { --t: #8e8e93; }
+
+/* ---------- the top row: see-through, the page passes under it ---------- */
+.top { position: relative; z-index: 5; height: 60px; gap: 12px; padding-left: 20px; border-bottom-color: transparent;
+  background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: saturate(160%) blur(18px); backdrop-filter: saturate(160%) blur(18px);
+  box-shadow: 0 1px 0 var(--line); }
+.title { font-family: var(--font-display); font-size: 21px; font-weight: 700; letter-spacing: -.015em; margin-left: 2px; }
+.navbtns .ib { width: 30px; height: 30px; background: transparent; border-color: transparent; }
+.navbtns .ib:hover:not(:disabled) { background: var(--glass-2); }
+
+/* ---------- a page coming in ---------- */
+@keyframes rise { from { opacity: 0; transform: translateY(14px) scale(.995); filter: blur(3px); } }
+@keyframes sink { from { opacity: 0; transform: translateY(-14px) scale(.995); filter: blur(3px); } }
+@keyframes up-in { from { opacity: 0; transform: translateY(10px); } }
+main.enter > * { animation: rise .5s var(--soft) both; }
+main.enter[data-dir="up"] > * { animation-name: sink; }
+/* what is inside a page comes in one after the other */
+main.enter .card > *, main.enter .res > *, main.enter .ov > *, main.enter .ov-cards > *, main.enter .ov-tiles > *, main.enter .ov-q > * { animation: up-in .55s var(--soft) both; }
+main.enter .card > *:nth-child(2), main.enter .res > *:nth-child(2), main.enter .ov > *:nth-child(2) { animation-delay: .05s; }
+main.enter .card > *:nth-child(3), main.enter .res > *:nth-child(3), main.enter .ov > *:nth-child(3) { animation-delay: .1s; }
+main.enter .card > *:nth-child(4), main.enter .res > *:nth-child(4), main.enter .ov > *:nth-child(4) { animation-delay: .15s; }
+main.enter .card > *:nth-child(5), main.enter .res > *:nth-child(5), main.enter .ov > *:nth-child(5) { animation-delay: .2s; }
+main.enter .card > *:nth-child(n+6), main.enter .res > *:nth-child(n+6), main.enter .ov > *:nth-child(n+6) { animation-delay: .25s; }
+main.enter .ov-cards > *, main.enter .ov-tiles > *, main.enter .ov-q > * { animation-delay: calc(.12s + var(--i, 0) * .045s); }
+
+/* ---------- headings ---------- */
+.hero h1, .empty h2, .verdict h2 { font-family: var(--font-display); letter-spacing: -.025em; }
+.hero h1 { font-size: clamp(36px, 4.6vw, 54px); font-weight: 250; }
+.hero h1 b { font-weight: 750; background: linear-gradient(100deg, var(--text) 10%, color-mix(in srgb, var(--acc) 75%, var(--text))); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero p { font-size: 15px; line-height: 1.55; }
+
+/* ---------- buttons: alive to the touch ---------- */
+.btn, .ib { transition: background .2s, border-color .2s, box-shadow .25s var(--soft), transform .25s var(--spring), color .2s; }
+.btn:hover:not(:disabled) { transform: translateY(-1px); box-shadow: var(--lift); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(.96); box-shadow: none; transition-duration: .08s; }
+.ib:hover:not(:disabled) { transform: translateY(-1px); }
+.ib:active:not(:disabled) { transform: scale(.9); transition-duration: .08s; }
+.btn.main { position: relative; overflow: hidden; background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 88%, #fff), var(--acc)); box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 8px 22px color-mix(in srgb, var(--acc) 32%, transparent); }
+.btn.main::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(255,255,255,.32) 50%, transparent 65%); transform: translateX(-120%); transition: transform .7s var(--soft); pointer-events: none; }
+.btn.main:hover:not(:disabled)::after { transform: translateX(120%); }
+.btn.main:hover:not(:disabled) { filter: none; box-shadow: 0 1px 0 rgba(255,255,255,.3) inset, 0 12px 30px color-mix(in srgb, var(--acc) 42%, transparent); }
+.btn.big { height: 50px; padding: 0 30px; border-radius: 999px; font-weight: 600; letter-spacing: .005em; }
+.btn svg { transition: transform .3s var(--spring); }
+.btn:hover:not(:disabled) svg { transform: scale(1.08); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--acc) 70%, transparent); outline-offset: 2px; border-radius: 10px; }
+button:focus:not(:focus-visible) { outline: none; }
+
+/* the switch springs, the segment's lens glides with a bounce */
+.switch { transition: background .3s var(--soft), box-shadow .3s; }
+.switch::after { transition: transform .45s var(--spring), width .2s; }
+.switch:active::after { width: 24px; }
+.switch.on:active::after { transform: translateX(14px); }
+.switch.on { box-shadow: 0 0 0 4px color-mix(in srgb, var(--ok) 14%, transparent); }
+.seg .lens { transition: left .45s var(--spring), width .35s var(--soft); }
+.seg button { transition: color .25s; }
+.seg button:hover:not(.on) { color: var(--text); }
+
+/* ---------- cards and tiles: soft depth, a lift under the pointer ---------- */
+.opts, .group, .drop { border-radius: var(--r-card); }
+.opts { box-shadow: var(--lit); }
+.group { transition: border-color .25s, box-shadow .3s var(--soft); }
+.file, .opt.cl { transition: background .2s, border-color .2s, transform .25s var(--spring); }
+.file:hover, .opt.cl:hover { background: color-mix(in srgb, var(--text) 5%, var(--tile)); }
+.drop { transition: border-color .25s, background .25s, transform .35s var(--spring), box-shadow .3s; }
+.drop:hover { border-color: color-mix(in srgb, var(--acc) 40%, var(--stroke)); }
+.drop.over { transform: scale(1.012); box-shadow: 0 0 0 6px color-mix(in srgb, var(--acc) 10%, transparent), var(--lit); }
+.drop .dz-i { transition: transform .4s var(--spring); }
+.drop:hover .dz-i, .drop.over .dz-i { transform: translateY(-3px) scale(1.06); }
+.chip { transition: background .2s, border-color .2s, transform .2s var(--spring); }
+a.chip:hover, button.chip:hover:not(:disabled) { transform: translateY(-1px); }
+
+/* windows pop with a spring, the toast slides down */
+@keyframes pop2 { from { opacity: 0; transform: translateY(8px) scale(.96); } }
+@keyframes drop2 { from { opacity: 0; transform: translate(-50%, -10px) scale(.97); } }
+.sheet { animation: pop2 .42s var(--spring); border-radius: 24px; }
+.toast { animation: drop2 .4s var(--spring); }
+.sheet p { white-space: pre-line; }
+
+/* the scroll bars: thin, out of the way */
+main::-webkit-scrollbar, .fm-list::-webkit-scrollbar, .fm-info::-webkit-scrollbar { width: 10px; height: 10px; }
+main::-webkit-scrollbar-thumb, .fm-list::-webkit-scrollbar-thumb, .fm-info::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 999px; background: color-mix(in srgb, var(--text) 18%, transparent) padding-box; }
+main::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--text) 32%, transparent); }
+main::-webkit-scrollbar-track { background: transparent; }
+
+/* ---------- Overview (app/tools/home.js) ---------- */
+.ov { max-width: 1080px; margin: 0 auto; padding: 28px 28px 64px; display: grid; gap: 22px; }
+.ov-hero { display: flex; align-items: center; gap: 30px; padding: 26px 30px; border-radius: 28px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); position: relative; overflow: hidden; }
+.ov-hero::after { content: ''; position: absolute; inset: auto -10% -60% 40%; height: 120%; background: radial-gradient(closest-side, color-mix(in srgb, var(--acc) 12%, transparent), transparent); pointer-events: none; }
+.ov-ring { position: relative; width: 136px; height: 136px; flex: none; }
+.ov-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ov-ring circle { fill: none; stroke-width: 9; }
+.ov-ring .t { stroke: var(--line); }
+.ov-ring .p { stroke: var(--acc); stroke-linecap: round; transition: stroke-dashoffset 1.2s var(--soft); filter: drop-shadow(0 0 6px color-mix(in srgb, var(--acc) 45%, transparent)); }
+.ov-ring b { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-size: 40px; font-weight: 300; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.ov-ring.wait svg { animation: spin 1.6s linear infinite; }
+.ov-ring.wait .p { stroke-dashoffset: 250 !important; }
+.ov-head { min-width: 0; display: grid; gap: 6px; position: relative; z-index: 1; }
+.ov-head small { color: var(--muted); font-size: 12.5px; letter-spacing: .02em; }
+.ov-head h1 { margin: 0; font-family: var(--font-display); font-size: clamp(26px, 3.2vw, 38px); font-weight: 300; letter-spacing: -.02em; line-height: 1.1; }
+.ov-head h1 b { font-weight: 700; }
+.ov-head p { margin: 2px 0 6px; color: var(--muted); font-size: 14.5px; }
+.ov-acts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ov-cards { display: grid; gap: 10px; }
+.ov-card { display: flex; align-items: center; gap: 16px; padding: 14px 16px 14px 14px; border-radius: 18px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); position: relative; overflow: hidden; transition: transform .3s var(--spring), box-shadow .3s; }
+.ov-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--c); opacity: .9; }
+.ov-card:hover { transform: translateY(-2px); }
+.ov-ic { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.ov-ic svg { width: 20px; height: 20px; }
+.ov-txt { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.ov-txt b { font-weight: 650; }
+.ov-txt small { color: var(--muted); font-size: 13px; }
+.ov-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(156px, 1fr)); gap: 10px; }
+.ov-tile { display: grid; gap: 3px; justify-items: start; text-align: left; padding: 16px; border-radius: 18px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); color: var(--text); transition: transform .3s var(--spring), border-color .2s; }
+.ov-tile:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--acc) 30%, var(--edge)); }
+.ov-tile small { color: var(--muted); font-size: 11.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.ov-tile b { font-family: var(--font-display); font-size: 26px; font-weight: 300; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.ov-tile > span { color: var(--dim); font-size: 12px; }
+.ov-bar { display: block; width: 100%; height: 5px; margin-top: 8px; border-radius: 999px; background: var(--well); overflow: hidden; }
+.ov-bar em { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, color-mix(in srgb, var(--acc) 70%, #ffb36b), var(--acc)); animation: grow 1s var(--soft) both .2s; transform-origin: left; }
+@keyframes grow { from { transform: scaleX(0); } }
+.ov-quick h3 { margin: 4px 0 10px 4px; font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
+.ov-q { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.ov-qb { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-radius: 16px; background: var(--glass); border: 1px solid var(--edge); color: var(--text); font-weight: 550; text-align: left; transition: transform .3s var(--spring), background .2s; }
+.ov-qb:hover { transform: translateY(-2px); background: var(--glass-2); }
+.ov-qb .tile-ic { width: 28px; height: 28px; border-radius: 8px; }
+.ov-qb .tile-ic svg { width: 16px; height: 16px; }
+@media (max-width: 1040px) {
+  .ov-hero { flex-direction: column; align-items: flex-start; }
+  .side .tile-ic { width: 26px; height: 26px; }
+}
+
+/* less movement: nothing of the above moves */
+html[data-motion="less"] main.enter > *, html[data-motion="less"] main.enter * { animation: none !important; }
+
+/* every tool fits in the side menu of a normal window; in a short one the list scrolls, with a thin bar on hover */
+.nav { height: 29px; }
+.side-list { gap: 9px; scrollbar-width: thin; scrollbar-color: transparent transparent; }
+.side-list:hover { scrollbar-color: color-mix(in srgb, var(--text) 22%, transparent) transparent; }
+.side-list::-webkit-scrollbar { display: block; width: 6px; }
+.side-list::-webkit-scrollbar-thumb { border-radius: 999px; background: transparent; }
+.side-list:hover::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--text) 22%, transparent); }
+.side-g small { padding-bottom: 2px; }
+.side .wm { height: 56px; }
+.side-foot { gap: 4px; padding-top: 6px; }

@@ -88,6 +88,63 @@ const LOG = `Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'A001_C003.mov':
   const sheet = media.contactHTML({ root: at('CARD'), clips: [{ name: 'A001_C002.mp4', dur: 4, tc: '', frames: [frame, frame, frame] }] }, { cols: 6 })
   assert.ok(sheet.includes('repeat(6,1fr)') && sheet.includes('A001_C002.mp4'))
 
+  // TC out: the last frame of the clip; drop-frame or no frame rate says nothing rather than something wrong
+  assert.strictEqual(media.tcOut('01:00:00:00', 3, 25), '01:00:02:24')
+  assert.strictEqual(media.tcOut('23:59:59:24', 1, 25), '00:00:00:23', 'past midnight')
+  assert.strictEqual(media.tcOut('01:00:00;00', 10, 29.97), '', 'drop-frame left out')
+  assert.strictEqual(media.tcOut('01:00:00:00', 10, null), '')
+  assert.strictEqual(pro.tcOut, '01:00:02:24', 'a real clip has its TC out')
+  // a clip killed by the time limit is not called broken for nothing
+  assert.ok(/too long/.test(media.whyBroken([], null)))
+  assert.ok(/could not read/.test(media.whyBroken([], 1)))
+
+  // quick check: start and end only, still finds a clip cut short, and passes a good long one
+  make(['-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25:duration=20', '-pix_fmt', 'yuv420p', '-c:v', 'libx264', '-preset', 'ultrafast'], 'CARD/LONG.mp4')
+  assert.ok((await media.checkClip(engine, bin, f('CARD/LONG.mp4'), stop, true)).ok, 'quick: a good long clip')
+  assert.ok(!(await media.checkClip(engine, bin, f('CARD/A001_C003.mp4'), stop, true)).ok, 'quick: a cut clip is found')
+
+  // a BRAW or R3D ffmpeg cannot open: named, not called broken
+  fs.writeFileSync(at('CARD/C003_A001.braw'), Buffer.alloc(4096, 7))
+  const braw = await media.checkClip(engine, bin, f('CARD/C003_A001.braw'), stop)
+  assert.ok(braw.unread && braw.why === 'Blackmagic RAW', 'BRAW is not read, not broken')
+  const brawClip = await media.describe(engine, bin, f('CARD/C003_A001.braw'), stop)
+  assert.strictEqual(brawClip.unread, 'Blackmagic RAW')
+
+  // photos: their size and a picture
+  make(['-f', 'lavfi', '-i', 'testsrc2=size=800x600', '-frames:v', '1'], 'CARD/STILLS/IMG_0001.png')
+  const ph = await media.describe(engine, bin, f('CARD/STILLS/IMG_0001.png'), stop)
+  assert.strictEqual(ph.kind, 'photo')
+  assert.deepStrictEqual([ph.video.w, ph.video.h, ph.dur], [800, 600, null])
+  assert.ok(ph.thumb.startsWith('data:image/jpeg;base64,'), 'a photo has a picture')
+
+  // the doors, through a stand-in for main: a PDF is of the report on the screen, headed by the company
+  const doors = {}, saved = []
+  const fake = {
+    engine, ffmpeg: () => bin, stopped: () => false, allow() {}, handle: (n, fn) => { doors[n] = fn },
+    run: (fn) => fn(), prefs: () => ({ company: 'The Mad Lions', companyLine: 'themadlions.com' }),
+    savePDF: async (html, name) => { saved.push({ html, name }); return '/tmp/' + name }, saveText: async () => '/tmp/x.csv',
+  }
+  media.register(fake)
+  const emit = () => {}
+  const one = await doors['report-scan']({ root: at('CARD/SOUND') }, { emit })
+  const two = await doors['report-scan']({ root: at('CARD'), photos: true }, { emit })
+  assert.ok(one.id && two.id && one.id !== two.id)
+  assert.ok(two.clips.some((c) => c.kind === 'photo'), 'photos in when asked')
+  assert.ok(!one.clips.some((c) => c.kind === 'photo'))
+  await doors['report-pdf']({ id: one.id, words: {}, locale: 'el-GR' })
+  assert.ok(saved[0].html.includes('T001.wav') && !saved[0].html.includes('A001_C001.mov'), 'the PDF of the report asked for, not the last one')
+  assert.ok(saved[0].html.includes('The Mad Lions') && saved[0].html.includes('themadlions.com'), 'the company heads the PDF')
+  assert.ok(saved[0].name.endsWith('SOUND.pdf'))
+  assert.ok(saved[0].html.includes('<html lang="el">'), 'a Greek PDF says so, for its capitals')
+  const cc = await doors['clipcheck-scan']({ root: at('CARD'), quick: true }, { emit })
+  assert.ok(cc.quick && cc.unread.length === 1 && cc.broken.some((b) => b.name === 'A001_C003.mp4'))
+  const sh = await doors['contact-scan']({ root: at('CARD'), frames: 1, photos: true }, { emit })
+  assert.ok(sh.clips.some((c) => c.name === 'IMG_0001.png' && c.frames.length === 1 && c.res === '800×600'), 'a photo on the sheet')
+  await doors['contact-pdf']({ id: sh.id, cols: 3, title: 'Φακίνος · Ματάρες μου', words: {} })
+  assert.ok(saved[1].html.includes('Φακίνος · Ματάρες μου') && saved[1].html.includes('The Mad Lions'), 'the sheet has its title and the company')
+  assert.ok(media.reportHTML({ root: 'x', clips: [{ name: 'a\'b', dir: '', audio: [] }] }).includes('a&#39;b'))
+  assert.deepStrictEqual(media.byCodec([pro, pro, wav]).map((c) => [c.name, c.n]), [['ProRes 422 HQ', 2], ['PCM', 1]])
+
   fs.rmSync(root, { recursive: true, force: true })
   console.log('media: all good')
 })().catch((e) => { console.error(e); process.exit(1) })

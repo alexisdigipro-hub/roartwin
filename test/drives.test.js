@@ -48,13 +48,50 @@ devfs                  204       204         0   100%     706          0  100%  
   assert.strictEqual(mac[1].fs, 'ExFAT')
   assert.strictEqual(mac[2].mounts[0].path, '/Volumes/OLD RAID')
 
+  // a drive with two HFS+ partitions: their free space adds up; a Time Machine snapshot mount and a hidden one are left out;
+  // a disk image is a disk image, the start-up disk can never be ejected (audit, 29 Oct)
+  const list2 = parsePlist(plist(dict({ AllDisksAndPartitions: [
+    { DeviceIdentifier: 'disk7', Size: 4e12, Partitions: [{ DeviceIdentifier: 'disk7s2' }, { DeviceIdentifier: 'disk7s3' }] },
+    { DeviceIdentifier: 'disk8', Size: 2e8 },
+  ] })))
+  const infos2 = {
+    disk7: { MediaName: 'G-DRIVE', BusProtocol: 'USB', Internal: false, SMARTStatus: 'Not Supported', TotalSize: 4e12, VirtualOrPhysical: 'Physical' },
+    disk7s2: { FilesystemUserVisibleName: 'Mac OS Extended (Journaled)' }, disk7s3: { FilesystemUserVisibleName: 'ExFAT' },
+    disk8: { MediaName: 'Disk Image', BusProtocol: 'Disk Image', Internal: false, VirtualOrPhysical: 'Virtual', TotalSize: 2e8 },
+  }
+  const df2 = parseDf(`Filesystem 1024-blocks Used Available Capacity iused ifree %iused Mounted on
+/dev/disk7s2 1953125000 953125000 1000000000 49% 1 0 100% /Volumes/Ψηφιακό Αρχείο
+/dev/disk7s3 1953125000 1453125000 500000000 75% 1 0 100% /Volumes/SHOOT B
+/dev/disk7s2 1953125000 953125000 1000000000 49% 1 0 100% /Volumes/com.apple.TimeMachine.localsnapshots/Backups.backupdb/x
+/dev/disk7s3 1953125000 1453125000 500000000 75% 1 0 100% /Volumes/.timemachine/abc
+/dev/disk8s1 195312 100000 95312 52% 1 0 100% /Volumes/Installer`)
+  const mac2 = macDrives({ list: list2, infos: infos2, df: df2 })
+  const g = mac2.find((d) => d.id === 'disk7')
+  assert.deepStrictEqual(g.mounts.map((m) => m.name), ['Ψηφιακό Αρχείο', 'SHOOT B'], 'a Greek name, no snapshot mounts')
+  assert.strictEqual(g.free, (1000000000 + 500000000) * 1024, 'two partitions add up')
+  assert.ok(g.ejectable && !g.startup)
+  const img = mac2.find((d) => d.id === 'disk8')
+  assert.strictEqual(img.kind, 'image'); assert.ok(img.ejectable)
+  assert.ok(!mac[0].ejectable && mac[0].startup, 'the start-up disk is never offered for eject')
+  const { quietMount, ejectError } = require('../electron/tools/drives')
+  assert.ok(quietMount('/System/Volumes/Data') && quietMount('/Volumes/.timemachine/x') && !quietMount('/Volumes/SHOOT B') && !quietMount('/'))
+  assert.match(ejectError('Volume SHOOT on disk7s3 failed to unmount: dissented by PID 412 (Finder)'), /still using/)
+
+  // Windows PowerShell 5.1 writes the enumerations as numbers: Healthy 0, Warning 1; NVMe 17, USB 7; SSD 4
+  const winNum = winDrives(JSON.stringify({
+    disks: [{ DeviceId: 0, FriendlyName: 'WD SN850', HealthStatus: 0, MediaType: 4, BusType: 17, Size: 1e12 }, { DeviceId: 1, FriendlyName: 'Card', HealthStatus: 1, MediaType: 0, BusType: 7, Size: 6.4e10 }],
+    parts: [{ DiskNumber: 0, DriveLetter: 'C' }, { DiskNumber: 1, DriveLetter: 'F' }],
+    vols: [{ DriveLetter: 'C', FileSystem: 'NTFS', Size: 1e12, SizeRemaining: 5e11 }, { DriveLetter: 'F', FileSystem: 'exFAT', Size: 6.4e10, SizeRemaining: 1e10 }],
+  }))
+  assert.deepStrictEqual(winNum.map((d) => [d.health, d.bus, d.ssd, d.kind]), [['ok', 'PCIe', true, 'internal'], ['warning', 'USB', false, 'external']])
+
   // Windows
   const win = winDrives(JSON.stringify({
     disks: [{ DeviceId: '0', FriendlyName: 'Samsung SSD 980 PRO', HealthStatus: 'Healthy', MediaType: 'SSD', BusType: 'NVMe', Size: 1e12 }, { DeviceId: '1', FriendlyName: 'SanDisk Extreme', HealthStatus: 'Warning', MediaType: 'SSD', BusType: 'USB', Size: 2e12 }],
     parts: [{ DiskNumber: 0, DriveLetter: 'C' }, { DiskNumber: 0, DriveLetter: null }, { DiskNumber: 1, DriveLetter: 'E' }],
     vols: [{ DriveLetter: 'C', FileSystemLabel: 'Windows', FileSystem: 'NTFS', Size: 9.9e11, SizeRemaining: 4e11 }, { DriveLetter: 'E', FileSystemLabel: 'SHOOT', FileSystem: 'exFAT', Size: 2e12, SizeRemaining: 1.5e12 }],
   }))
-  assert.deepStrictEqual(win.map((d) => [d.name, d.health, d.kind, d.mounts[0].path]), [['Samsung SSD 980 PRO', 'ok', 'internal', 'C:\\'], ['SanDisk Extreme', 'failing', 'external', 'E:\\']])
+  assert.deepStrictEqual(win.map((d) => [d.name, d.health, d.kind, d.mounts[0].path]), [['Samsung SSD 980 PRO', 'ok', 'internal', 'C:\\'], ['SanDisk Extreme', 'warning', 'external', 'E:\\']])
   // one disk alone comes as an object, not a list; bad JSON is nothing
   assert.strictEqual(winDrives(JSON.stringify({ disks: { DeviceId: 0, FriendlyName: 'X', Size: 1 }, parts: { DiskNumber: 0, DriveLetter: 'D' }, vols: { DriveLetter: 'D', Size: 1, SizeRemaining: 1 } })).length, 1)
   assert.deepStrictEqual(winDrives('not json'), [])

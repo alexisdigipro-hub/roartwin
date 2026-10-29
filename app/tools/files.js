@@ -5,7 +5,7 @@
 
 const DEFAULT_TPL = ['01_Footage', '02_Audio', '03_Graphics', '04_Music', '05_Project Files', '06_Exports', '07_Documents']
 const newPane = () => ({ path: '', parent: '', items: [], sort: { k: 'name', d: 1 }, q: '', sel: new Set(), anchor: '', err: '' })
-const F = { ready: false, places: [], panes: [newPane(), newPane()], active: 0, info: true, infos: {}, loading: '', sizes: {}, thumbs: {}, asked: new Set(), job: null, favs: [], tpl: DEFAULT_TPL, which: 0 }
+const F = { ready: false, places: [], panes: [newPane(), newPane()], active: 0, info: true, infos: {}, loading: '', sizes: {}, thumbs: {}, asked: new Set(), job: null, favs: [], tpl: DEFAULT_TPL, which: 0, hidden: false }
 let C = null // the page's ctx, for what answers later
 const call = (name, args) => C.call(name, args)
 const single = () => window.innerWidth < 1180
@@ -18,6 +18,7 @@ const SVG = {
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="m12 4 2.5 5.1 5.6.8-4 4 .9 5.6L12 16.9l-5 2.6.9-5.6-4-4 5.6-.8z"/></svg>',
   image: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5"/></svg>',
   link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+  eye: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/></svg>',
   open: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4.5h5.5V10M19.5 4.5 11 13M18 14v4a1.5 1.5 0 0 1-1.5 1.5h-10A1.5 1.5 0 0 1 5 18V8a1.5 1.5 0 0 1 1.5-1.5h4"/></svg>',
 }
 const KIND = { folder: 'Folder', package: 'Package', video: 'Video', image: 'Image', audio: 'Audio', project: 'Project', doc: 'Document', archive: 'Archive', link: 'Link', other: 'File' }
@@ -42,6 +43,7 @@ async function start() {
   F.favs = C.load('files', 'favs', [])
   F.tpl = C.load('files', 'tpl', DEFAULT_TPL)
   F.info = C.load('files', 'info', true)
+  F.hidden = C.load('files', 'hidden', false)
   try { F.places = await call('files-places') } catch { F.places = [] }
   const home = F.places[0]?.path || ''
   const second = F.places.find((x) => /^(Movies|Videos)$/.test(x.name))?.path || F.places[1]?.path || home
@@ -54,7 +56,7 @@ async function start() {
 /* ---------- the list ---------- */
 function shown(pane) {
   const q = pane.q.trim().toLowerCase()
-  const hide = C.S.opts?.skipHidden !== false
+  const hide = !F.hidden
   const { k, d } = pane.sort
   const val = (x) => (k === 'size' ? (x.dir ? F.sizes[x.path] ?? -1 : x.size) : k === 'date' ? x.mtime : k === 'kind' ? KIND[x.kind] || '' : x.name.toLowerCase())
   return pane.items.filter((x) => (!hide || !x.hidden) && (!q || x.name.toLowerCase().includes(q)))
@@ -107,23 +109,32 @@ function paneEl(ctx, i) {
   const sep = pane.path.includes('\\') ? '\\' : '/'
   const segs = pane.path.split(/[\\/]/).filter(Boolean)
   let acc = pane.path.startsWith('/') ? '/' : ''
-  const crumbs = segs.map((s, k) => { acc = k === 0 && !acc ? s + sep : acc + (acc.endsWith(sep) ? '' : sep) + s; const p = acc; return h('button', { class: 'fm-crumb', title: p, onclick: () => openIn(i, p) }, s) })
+  const all = segs.map((s, k) => { acc = k === 0 && !acc ? s + sep : acc + (acc.endsWith(sep) ? '' : sep) + s; return { s, p: acc } })
+  // a long path: its last three folders, and … for the ones above (it opens the folder just above them)
+  const keep = !single() && F.info ? 2 : 3, cut = all.length > keep + 1 ? all.length - keep : 0
+  const crumbs = [
+    cut ? h('button', { class: 'fm-crumb more', title: all[cut - 1].p, 'aria-label': all[cut - 1].p, onclick: () => openIn(i, all[cut - 1].p) }, h('span', {}, '…')) : null,
+    ...all.slice(cut).map(({ s, p }) => h('button', { class: 'fm-crumb', title: p, onclick: () => openIn(i, p) }, h('span', {}, s))),
+  ].filter(Boolean)
   const head = h('div', { class: 'fm-head' },
     h('button', { class: 'ib sm', title: t('Up a folder'), 'aria-label': t('Up a folder'), html: SVG.up, disabled: !pane.parent, onclick: () => openIn(i, pane.parent) }),
     h('div', { class: 'fm-crumbs' }, ...crumbs),
     h('label', { class: 'fm-search' }, ico('search'), h('input', { type: 'search', placeholder: t('Search'), value: pane.q, 'aria-label': t('Search in this folder'),
       oninput: (e) => { pane.q = e.target.value; const box = document.querySelector(`.fm-list[data-i="${i}"]`); if (box) box.replaceWith(listEl(ctx, i)) } })))
   const col = (k, label) => h('button', { class: 'fm-col' + (pane.sort.k === k ? ' on' : ''), onclick: () => { pane.sort = { k, d: pane.sort.k === k ? -pane.sort.d : 1 }; C.draw() } }, t(label), pane.sort.k === k ? (pane.sort.d > 0 ? ' ↑' : ' ↓') : '')
-  const onDrop = (e) => {
+  const onDrop = async (e) => {
     const raw = e.dataTransfer.getData('text/x-roar-files')
-    if (!raw) return
     e.preventDefault()
-    const { from, paths } = JSON.parse(raw)
-    if (from === i || !pane.path) return
-    transferAsk(paths, pane.path)
+    if (!pane.path) return
+    if (raw) { const { from, paths } = JSON.parse(raw); if (from !== i) transferAsk(paths, pane.path); return }
+    // from the Finder or the desktop: those files, once the Mac side has taken note of them
+    const paths = [...(e.dataTransfer.files || [])].map((f) => C.pathOf(f)).filter(Boolean)
+    if (!paths.length) return
+    const ok = await call('files-dropped', { paths }).catch(() => [])
+    if (ok.length) transferAsk(ok, pane.path)
   }
   return h('section', { class: 'fm-pane' + (F.active === i ? ' act' : ''), onmousedown: () => { if (F.active !== i) { F.active = i; document.querySelectorAll('.fm-pane').forEach((el) => el.classList.toggle('act', el.dataset.i === String(i))) } }, 'data-i': String(i),
-    ondragover: (e) => { if ([...e.dataTransfer.types].includes('text/x-roar-files')) e.preventDefault() }, ondrop: onDrop },
+    ondragover: (e) => { const ty = [...e.dataTransfer.types]; if (ty.includes('text/x-roar-files') || ty.includes('Files')) e.preventDefault() }, ondrop: onDrop },
     head,
     pane.err ? h('p', { class: 'fm-err' }, ico('warn'), pane.err) : null,
     h('div', { class: 'fm-cols' }, h('span'), col('name', 'Name'), col('size', 'Size'), col('kind', 'Kind'), col('date', 'Modified')),
@@ -206,7 +217,9 @@ function ask(title, value, okLabel) {
   return new Promise((done) => {
     let input
     veil('fm-ask', (close) => {
-      const finish = (v) => { close(); done(v) }
+      // the answer first: closing the window answers null, and a promise keeps its first answer (audit, 29 Oct: New
+      // folder, Rename and Go to always got null, so they did nothing)
+      const finish = (v) => { done(v); close() }
       input = h('input', { class: 'fm-input', value, onkeydown: (e) => { if (e.key === 'Enter') finish(input.value.trim() || null) } })
       return [h('h3', {}, title), input, h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => finish(null) }, t('Cancel')), h('button', { class: 'btn main', onclick: () => finish(input.value.trim() || null) }, okLabel))]
     }, () => done(null))
@@ -219,12 +232,14 @@ async function preview() {
   if (!it || it.dir) return
   const strip = h('div', { class: 'fm-frames' })
   const infoBox = h('div', { class: 'fm-prev-info' }, h('p', { class: 'fm-empty' }, t('Reading…')))
-  veil('fm-prev', (close) => [h('div', { class: 'fm-prev-head' }, h('h3', { title: it.name }, it.name), h('button', { class: 'ib sm', title: t('Open'), 'aria-label': t('Open'), html: SVG.open, onclick: () => C.open(it.path) }), h('button', { class: 'ib sm', 'aria-label': t('Close'), html: I.x, onclick: close })), strip, infoBox])
+  const ql = C.platform === 'darwin' ? h('button', { class: 'btn', title: t('Play it in the Mac\'s own Quick Look'), onclick: () => call('files-quicklook', { path: it.path }).catch((e) => C.toast(C.err(e))) }, h('span', { html: I.play }), h('span', { class: 'lbl' }, t('Quick Look'))) : null
+  veil('fm-prev', (close) => [h('div', { class: 'fm-prev-head' }, h('h3', { title: it.name }, it.name), ql, h('button', { class: 'ib sm', title: t('Open'), 'aria-label': t('Open'), html: SVG.open, onclick: () => C.open(it.path) }), h('button', { class: 'ib sm', 'aria-label': t('Close'), html: I.x, onclick: close })), strip, infoBox])
   if (it.kind === 'video') {
     strip.append(h('p', { class: 'fm-empty' }, t('Reading the pictures…')))
     call('files-frames', { path: it.path }).then((fr) => strip.replaceChildren(...(fr.length ? fr.map((f) => h('figure', {}, h('img', { src: f.url, alt: '' }), h('figcaption', {}, C.dur(f.at)))) : [h('p', { class: 'fm-empty' }, t('No picture to show.'))]))).catch(() => strip.replaceChildren())
-  } else if (it.kind === 'image') {
-    call('files-thumb', { path: it.path }).then((u) => strip.replaceChildren(u ? h('img', { class: 'fm-still', src: u, alt: '' }) : h('p', { class: 'fm-empty' }, t('No picture to show.'))))
+  } else if (it.kind === 'image' || it.kind === 'doc') {
+    strip.append(h('p', { class: 'fm-empty' }, t('Reading the pictures…')))
+    call('files-picture', { path: it.path }).catch(() => '').then((u) => strip.replaceChildren(u ? h('img', { class: 'fm-still', src: u, alt: '' }) : h('p', { class: 'fm-empty' }, t('No picture to show.'))))
   } else strip.remove()
   const got = F.infos[it.path] || await call('files-info', { path: it.path }).catch((e) => ({ sections: [], err: C.err(e) }))
   F.infos[it.path] = got
@@ -258,7 +273,7 @@ async function compare() {
   veil('fm-cmp', (close) => [h('div', { class: 'fm-prev-head' }, h('h3', {}, t('{a} and {b}', { a: name(r.left), b: name(r.right) })), h('button', { class: 'ib sm', 'aria-label': t('Close'), html: C.I.x, onclick: close })),
     h('div', { class: 'sum' }, h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), t('{n} the same on both', { n: num(r.same) }))),
     group(t('Only in {f}', { f: name(r.left) }), 'var(--acc)', r.onlyLeft, (x) => sz(x.size)),
-    group(t('Only in {f}', { f: name(r.right) }), '#64d2ff', r.onlyRight, (x) => sz(x.size)),
+    group(t('Only in {f}', { f: name(r.right) }), 'var(--info, #3aa7e0)', r.onlyRight, (x) => sz(x.size)),
     group(t('Same name, another size'), 'var(--warn)', r.differ, (x) => `${sz(x.left)} · ${sz(x.right)}`)])
 }
 
@@ -311,6 +326,12 @@ async function renameIt() {
   if (!n || n === it.name) return
   try { const p = await call('files-rename', { path: it.path, name: n }); const pane = F.panes[F.active]; await openIn(F.active, pane.path, true); pane.sel = new Set([p]); pane.anchor = p; C.draw() } catch (e) { C.toast(C.err(e)) }
 }
+async function goTo() {
+  const pane = F.panes[F.active]
+  const p = await ask(C.t('Go to a folder'), pane.path || '', C.t('Go'))
+  if (p) openIn(F.active, p.replace(/^~(?=$|[\\/])/, F.places[0]?.path || '~'))
+}
+function hiddenFiles() { F.hidden = !F.hidden; C.save('files', 'hidden', F.hidden); C.draw() }
 function pin() {
   const p = F.panes[F.active].path
   if (!p) return
@@ -336,7 +357,7 @@ function keys() {
       requestAnimationFrame(() => document.querySelector(`.fm-list[data-i="${F.active}"] .fm-row.sel:is([data-path="${CSS.escape(it.path)}"])`)?.scrollIntoView({ block: 'nearest' }))
     }
     const mod = e.metaKey || e.ctrlKey
-    if (e.key === 'ArrowDown' && mod) { const it = list[at]; if (it) { e.preventDefault(); go(F.active, it) } } else if (e.key === 'ArrowUp' && mod) { if (pane.parent) { e.preventDefault(); openIn(F.active, pane.parent) } } else if (e.key === 'ArrowDown') { e.preventDefault(); move(1) } else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) } else if (e.key === 'Enter') { const it = list[at]; if (it) { e.preventDefault(); go(F.active, it) } } else if (e.key === ' ') { e.preventDefault(); preview() } else if (e.key === 'Tab' && !single()) { e.preventDefault(); F.active = other(); C.draw() } else if ((e.key === 'Backspace' && mod) || e.key === 'Delete') { e.preventDefault(); trash() } else if (e.key === 'F2') { e.preventDefault(); renameIt() } else if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); pane.sel = new Set(list.map((x) => x.path)); C.draw() }
+    if (e.key === 'ArrowDown' && mod) { const it = list[at]; if (it) { e.preventDefault(); go(F.active, it) } } else if (e.key === 'ArrowUp' && mod) { if (pane.parent) { e.preventDefault(); openIn(F.active, pane.parent) } } else if (e.key === 'ArrowDown') { e.preventDefault(); move(1) } else if (e.key === 'ArrowUp') { e.preventDefault(); move(-1) } else if (e.key === 'Enter') { const it = list[at]; if (it) { e.preventDefault(); go(F.active, it) } } else if (e.key === ' ') { e.preventDefault(); preview() } else if (e.key === 'Tab' && !single()) { e.preventDefault(); F.active = other(); C.draw() } else if ((e.key === 'Backspace' && mod) || e.key === 'Delete') { e.preventDefault(); trash() } else if (e.key === 'F2') { e.preventDefault(); renameIt() } else if (mod && e.shiftKey && e.key.toLowerCase() === 'g') { e.preventDefault(); goTo() } else if (mod && e.shiftKey && e.key === '.') { e.preventDefault(); hiddenFiles() } else if (mod && e.key.toLowerCase() === 'a') { e.preventDefault(); pane.sel = new Set(list.map((x) => x.path)); C.draw() }
   })
   let was = single()
   window.addEventListener('resize', () => { if (C?.S.mode === 'files' && single() !== was) { was = single(); C.draw() } })
@@ -357,7 +378,10 @@ function view(ctx) {
     one ? ctx.seg([[0, t('Left')], [1, t('Right')]], F.active, (v) => { F.active = v; C.draw() }) : null,
     ...F.places.map((x) => place(x.path, x.kind === 'drive' ? I.drive : I.folder, x.kind === 'home' ? t('Home') : t(x.name))),
     ...F.favs.map((p) => place(p, SVG.star, p.split(/[\\/]/).filter(Boolean).pop() || p, true)),
-    h('button', { class: 'chip fm-place', onclick: async () => { const r = await call('files-pick').catch(() => null); if (r) openIn(F.active, r.path) } }, ico('plus'), t('Open…')))
+    h('button', { class: 'chip fm-place', onclick: async () => { const r = await call('files-pick').catch(() => null); if (r) openIn(F.active, r.path) } }, ico('plus'), t('Open…')),
+    h('button', { class: 'chip fm-place', title: t('Type or paste a path') + (C.platform === 'darwin' ? ' (⇧⌘G)' : ''), onclick: goTo }, ico('search'), t('Go to…')),
+    h('span', { class: 'spacer' }),
+    h('button', { class: 'chip fm-place' + (F.hidden ? ' on' : ''), title: t('Show the hidden files too') + (C.platform === 'darwin' ? ' (⇧⌘.)' : ''), 'aria-pressed': String(F.hidden), onclick: hiddenFiles }, h('span', { html: SVG.eye }), t('Hidden files')))
   const panes = one ? [paneEl(ctx, F.active)] : [paneEl(ctx, 0), paneEl(ctx, 1)]
   const grid = h('div', { class: 'fm' + (one ? ' one' : '') + (F.info ? ' with-info' : '') }, ...panes, F.info ? infoEl(ctx) : null)
   requestAnimationFrame(() => {
@@ -451,6 +475,9 @@ const demo = {
   },
   'files-trash': async ({ paths }) => { for (const p of paths) TREE[parentOf(p)] = (TREE[parentOf(p)] || []).filter((x) => x.path !== p); return { ok: paths, failed: [] } },
   'files-template': async ({ path: p, names }) => { let n = 0; for (const x of names) { const f = x.split('/')[0]; if (!(TREE[p] || []).some((y) => y.name === f)) { add(p, f, 0, 0, true); n++ } } return n },
+  'files-dropped': async ({ paths }) => paths,
+  'files-picture': async ({ path: p }) => { await wait(200); return pic(p, 1600, 1066) },
+  'files-quicklook': async () => true,
   'files-compare': async ({ left, right }) => { await wait(500); return { left, right, same: 412, onlyLeft: [{ rel: 'Day01/A001_C007.mov', size: 19.9e9 }, { rel: 'Day01/A001_C008.mov', size: 21.6e9 }], onlyRight: [{ rel: 'Showreel 2026.mov', size: 4.2e9 }], differ: [{ rel: 'Ilie mou_v7.drp', left: 2.1e6, right: 1.9e6 }] } },
 }
 
@@ -480,6 +507,8 @@ const el = {
   'Compare the two panes': 'Σύγκρινε τα δύο παράθυρα', 'Pin this folder': 'Καρφίτσωσε τον φάκελο', 'Unpin this folder': 'Ξεκαρφίτσωσε τον φάκελο',
   'That is not in a folder opened here.': 'Αυτό δεν είναι σε φάκελο ανοιχτό εδώ.', 'That folder is not there.': 'Αυτός ο φάκελος δεν υπάρχει.', 'That name is taken.': 'Το όνομα υπάρχει ήδη.', 'Give it a name.': 'Δώσε του όνομα.',
   'A folder cannot go inside itself.': 'Ένας φάκελος δεν μπαίνει μέσα στον εαυτό του.', 'A file with that name appeared meanwhile.': 'Εμφανίστηκε στο μεταξύ αρχείο με αυτό το όνομα.',
+  'Go to a folder': 'Πήγαινε σε φάκελο', Go: 'Πήγαινε', 'Go to…': 'Πήγαινε σε…', 'Type or paste a path': 'Γράψε ή επικόλλησε μια διαδρομή', 'Hidden files': 'Κρυφά αρχεία', 'Show the hidden files too': 'Δείξε και τα κρυφά αρχεία',
+  'Quick Look': 'Quick Look', "Play it in the Mac's own Quick Look": 'Παίξ’ το στο Quick Look του Mac',
 }
 
 // back and forward (app.js): the folders the two panes show

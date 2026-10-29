@@ -1,5 +1,5 @@
 /* Computer stats (Alex, 28 Oct): soft tiles in a grid, big thin numbers, small graphs of the last minute */
-.st-grid { padding: 18px 20px 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-content: start; }
+.st-grid { --st-up: #64d2ff; --st-gpu: #bf5af2; padding: 18px 20px 40px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; align-content: start; }
 .st-tile { min-width: 0; display: grid; gap: 10px; align-content: start; padding: 18px; border-radius: 22px; background: var(--glass); border: 1px solid var(--edge); box-shadow: var(--lit); }
 .st-wide { grid-column: 1 / -1; }
 .st-wait { grid-column: 1 / -1; min-height: 160px; place-items: center; }
@@ -14,17 +14,18 @@
 .st-row span { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-row b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .st-chips { display: flex; flex-wrap: wrap; gap: 6px; }
-.st-bar { height: 8px; border-radius: 999px; background: rgba(0,0,0,.3); overflow: hidden; }
+.st-bar { height: 8px; border-radius: 999px; background: var(--well); overflow: hidden; }
 .st-bar i { display: block; height: 100%; border-radius: inherit; background: var(--ok); transition: width .6s var(--ease); }
 .spark { display: block; width: 100%; height: 44px; }
 .spark .l { fill: none; stroke-width: 2; vector-effect: non-scaling-stroke; }
 .spark.acc .l { stroke: var(--acc); } .spark.acc .a { fill: color-mix(in srgb, var(--acc) 16%, transparent); }
 .spark.ok .l { stroke: var(--ok); } .spark.ok .a { fill: color-mix(in srgb, var(--ok) 14%, transparent); }
-.spark.up .l { stroke: #64d2ff; } .spark.up .a { fill: color-mix(in srgb, #64d2ff 12%, transparent); }
+.spark.up .l { stroke: var(--st-up); } .spark.up .a { fill: color-mix(in srgb, var(--st-up) 12%, transparent); }
+.spark.gpu .l { stroke: var(--st-gpu); } .spark.gpu .a { fill: color-mix(in srgb, var(--st-gpu) 14%, transparent); }
 .st-sparks { display: grid; gap: 4px; }
 .st-sparks .spark { height: 32px; }
 .st-cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(10px, 1fr)); gap: 3px; height: 26px; }
-.st-cores i { border-radius: 4px; background: linear-gradient(to top, var(--acc) calc(var(--v) * 100%), rgba(255,255,255,.07) calc(var(--v) * 100%)); }
+.st-cores i { border-radius: 4px; background: linear-gradient(to top, var(--acc) calc(var(--v) * 100%), var(--well) calc(var(--v) * 100%)); }
 .st-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; }
 .st-pair > div { display: grid; gap: 2px; }
 .st-pair small { color: var(--muted); font-size: 12px; }
@@ -37,7 +38,20 @@
 .st-two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .st-two small { color: var(--muted); font-size: 12px; }
 .st-procs { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 4px; }
-.st-procs li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 12px; background: rgba(0,0,0,.18); font-size: 13px; min-width: 0; }
+.st-procs li { display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px; border-radius: 12px; background: var(--tile); font-size: 13px; min-width: 0; }
 .st-procs li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .st-procs li b { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 760px) { .st-two { grid-template-columns: 1fr; } }
+html[data-theme="light"] .st-grid { --st-up: #0a84ff; --st-gpu: #8e44d9; }
+/* what slows it down (Alex, 29 Oct) */
+.st-advice { padding: 14px 18px; }
+.st-adv { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.st-adv li, .st-adv-ok { display: flex; align-items: baseline; gap: 10px; margin: 0; font-size: 14px; }
+.st-adv li i, .st-adv-ok i { width: 8px; height: 8px; flex: none; border-radius: 50%; background: var(--warn); transform: translateY(-1px); }
+.st-adv li.bad i { background: var(--acc); }
+.st-adv-ok i { background: var(--ok); }
+.st-hist { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
+.st-hist small { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+.st-hist .st-row b { font-weight: 500; font-size: 12px; }
+.st-hist .st-row span { flex: none; }
+.st-hist .st-row b { overflow: hidden; text-overflow: ellipsis; }

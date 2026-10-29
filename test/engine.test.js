@@ -196,6 +196,14 @@ async function more() {
     const tn = await makeTwin({ source: at2('card'), targets: [at2('driveC')], folder: '2026-10-25_Fakinos: Mataria/Day01/CamA_Card03' })
     assert.strictEqual(tn.targets[0], at2('driveC', '2026-10-25_Fakinos- Mataria', 'Day01', 'CamA_Card03'))
     assert.ok(fs.existsSync(at2('driveC', '2026-10-25_Fakinos- Mataria', 'Day01', 'CamA_Card03', 'sub', 'C.wav')))
+    // a card is copied whole: its hidden files too (skipHidden or not), never a Mac's own leftovers
+    fs.mkdirSync(at2('card2/CLIP'), { recursive: true }); fs.mkdirSync(at2('card2/.Spotlight-V100'), { recursive: true })
+    fs.writeFileSync(at2('card2/CLIP/A.mov'), 'clip\n'.repeat(300)); fs.writeFileSync(at2('card2/.camera_meta.xml'), '<meta/>')
+    fs.writeFileSync(at2('card2/.DS_Store'), 'x'); fs.writeFileSync(at2('card2/CLIP/._A.mov'), 'x'); fs.writeFileSync(at2('card2/.Spotlight-V100/store'), 'x')
+    const th = await makeTwin({ source: at2('card2'), targets: [at2('driveD')], skipHidden: true })
+    assert.strictEqual(th.total, 2, 'the clip and the hidden camera file')
+    assert.ok(fs.existsSync(at2('driveD/card2/.camera_meta.xml')), 'a hidden file on the card is copied')
+    assert.ok(!fs.existsSync(at2('driveD/card2/.DS_Store')) && !fs.existsSync(at2('driveD/card2/CLIP/._A.mov')) && !fs.existsSync(at2('driveD/card2/.Spotlight-V100')), 'a Mac\'s leftovers are not')
     // months later: the drive against its report; one file changed on the shelf, one gone
     fs.writeFileSync(at2('driveA/card/B.mov'), 'take b\n'.repeat(3999) + 'tAke b\n')
     fs.rmSync(at2('driveA/card/D.mov'))

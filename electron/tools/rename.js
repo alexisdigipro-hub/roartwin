@@ -5,7 +5,7 @@
 const fs = require('fs')
 const fsp = fs.promises
 const path = require('path')
-const { parseInfo, parseMdls, kindOf, inside, cleanName } = require('./files')
+const { parseInfo, parseMdls, kindOf, inside, cleanName, freeName, sameFile } = require('./files')
 
 const exists = async (p) => { try { await fsp.lstat(p); return true } catch { return false } }
 const pad = (n, w = 2) => String(n).padStart(w, '0')
@@ -67,16 +67,24 @@ function plan(files, rule = {}, folderNames = files.map((f) => f.name)) {
     .sort((a, b) => when(a) - when(b) || a.name.localeCompare(b.name))
   const fmt = DATE[r.dateFormat] || DATE['YYYY-MM-DD']
   const width = Math.max(1, Math.min(8, Number(r.pad) || 1))
-  const rows = sel.map((f, i) => {
+  let day = '', k = 0
+  const rows = sel.map((f) => {
     const d = new Date(when(f))
+    // the counter starts again on each shooting day when asked (a card of three days: _001 on each)
+    const today = DATE['YYYY-MM-DD'](d)
+    if (r.perDay && today !== day) { day = today; k = 0 }
+    const n = k++
     const vars = {
       date: fmt(d), time: `${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`,
-      project: r.project || '', cam: r.cam || '', card: r.card || '', n: String((Number(r.start) || 0) + i).padStart(width, '0'),
+      project: r.project || '', cam: r.cam || '', card: r.card || '', n: String((Number(r.start) || 0) + n).padStart(width, '0'),
       name: f.base, ext: f.ext, tc: (f.meta?.tc || '').replace(/[:;.]/g, ''), camera: f.meta?.camera || '', reel: f.meta?.reel || '',
     }
-    let base = String(r.pattern).replace(/\{(\w+)\}/g, (all, k) => (TOKENS.includes(k) ? vars[k] : all))
-    // the parts a missing token leaves: "2026-10-28__A" is "2026-10-28_A"
-    base = cleanName(base).replace(/([_\-. ])[_\-. ]*(?=[_\-. ])/g, '').replace(/^[_\-. ]+|[_\-. ]+$/g, '')
+    // a token with nothing in it leaves a mark, so only the separators around it go ("2026-10-28_{project}_A" is
+    // "2026-10-28_A") and the ones written into the rule stay ("{project} - {name}" keeps its " - ")
+    const MISS = '\u0001'
+    let base = String(r.pattern).replace(/\{(\w+)\}/g, (all, key) => (TOKENS.includes(key) ? (String(vars[key] ?? '').trim() || MISS) : all))
+    base = base.replace(/([_\-. ]*)\u0001+([_\-. ]*)/g, (m, a, b) => a || b)
+    base = cleanName(base).replace(/^[_\-. ]+|[_\-. ]+$/g, '')
     if (r.case === 'upper') base = base.toUpperCase()
     else if (r.case === 'lower') base = base.toLowerCase()
     const to = !base ? '' : /\{ext\}/.test(r.pattern) || !f.ext ? base : `${base}.${f.ext}`
@@ -84,50 +92,77 @@ function plan(files, rule = {}, folderNames = files.map((f) => f.name)) {
   })
   const count = new Map()
   for (const x of rows) if (x.to) count.set(x.to.toLowerCase(), (count.get(x.to.toLowerCase()) || 0) + 1)
+  for (const x of rows) if (x.status === 'ok' && count.get(x.to.toLowerCase()) > 1) x.status = 'clash'
+  // another file has the name: fine when that file is renamed away in this same batch (001 to 002 while 002 goes to
+  // 003); else taken. Worked out until nothing changes, as one row taken keeps its name and may block another.
   const others = new Set(folderNames.map((n) => n.toLowerCase()))
-  for (const x of rows) {
-    if (x.status !== 'ok') continue
-    const k = x.to.toLowerCase()
-    if (count.get(k) > 1) x.status = 'clash'
-    else if (others.has(k) && k !== x.from.toLowerCase()) x.status = 'taken'
+  for (let changed = true; changed;) {
+    changed = false
+    const leaving = new Set(rows.filter((x) => x.status === 'ok').map((x) => x.from.toLowerCase()))
+    for (const x of rows) {
+      if (x.status !== 'ok') continue
+      const key = x.to.toLowerCase()
+      if (others.has(key) && key !== x.from.toLowerCase() && !leaving.has(key)) { x.status = 'taken'; changed = true }
+    }
   }
+  // a name that stays (same, or refused) keeps it, so no other row may take it
+  const kept = new Set(rows.filter((x) => x.status !== 'ok').map((x) => x.from.toLowerCase()))
+  for (const x of rows) if (x.status === 'ok' && kept.has(x.to.toLowerCase()) && x.to.toLowerCase() !== x.from.toLowerCase()) x.status = 'taken'
   return rows
 }
 
-/* the plan carried out, one rename at a time, never over a file; the moves come back for Undo */
-async function apply(dir, rows) {
-  if (rows.some((x) => ['clash', 'taken', 'empty'].includes(x.status))) throw new Error('Some names clash or are taken. Change the rule first.')
-  const moves = [], failed = []
-  for (const x of rows.filter((y) => y.status === 'ok')) {
-    const from = path.join(dir, x.from), to = path.join(dir, x.to)
+/* renames in two steps, so names may pass from one file to another (001 to 002 while 002 goes to 003) and only the
+   case may change: every file first to a passing name of its own, then each to its new name, never over a file that
+   is not part of the batch. A file whose new name turns out taken goes back to its old name. */
+async function moveAll(dir, pairs) {
+  const moves = [], failed = [], parked = []
+  for (const x of pairs) {
+    const from = path.join(dir, x.from)
     try {
-      if (x.to.toLowerCase() === x.from.toLowerCase()) { const tmp = from + '.roartwin-rename'; await fsp.rename(from, tmp); await fsp.rename(tmp, to) } else {
-        if (await exists(to)) throw new Error('That name is taken.')
-        await fsp.rename(from, to)
-      }
-      moves.push({ from: x.from, to: x.to })
+      const tmp = await freeName(dir, `.roarkit-${process.pid}-${parked.length}-${x.from}`)
+      await fsp.rename(from, tmp)
+      parked.push({ ...x, tmp })
     } catch (e) { failed.push({ name: x.from, error: String(e?.message || e) }) }
+  }
+  for (const x of parked) {
+    const to = path.join(dir, x.to)
+    try {
+      if (await exists(to) && !(await sameFile(x.tmp, to))) throw new Error('That name is taken.')
+      await fsp.rename(x.tmp, to)
+      moves.push({ from: x.from, to: x.to })
+    } catch (e) {
+      await fsp.rename(x.tmp, path.join(dir, x.from)).catch(() => {})
+      failed.push({ name: x.from, error: String(e?.message || e) })
+    }
   }
   return { moves, failed }
 }
+/* the plan carried out, never over a file; the moves come back for Undo */
+async function apply(dir, rows) {
+  if (rows.some((x) => ['clash', 'taken', 'empty'].includes(x.status))) throw new Error('Some names clash or are taken. Change the rule first.')
+  return moveAll(dir, rows.filter((y) => y.status === 'ok').map((x) => ({ from: x.from, to: x.to })))
+}
 async function undo(dir, moves) {
-  let done = 0
-  const failed = []
-  for (const m of [...moves].reverse()) {
-    const from = path.join(dir, m.from), to = path.join(dir, m.to)
-    try {
-      if (m.to.toLowerCase() !== m.from.toLowerCase() && await exists(from)) throw new Error('The old name is taken now.')
-      if (m.to.toLowerCase() === m.from.toLowerCase()) { const tmp = to + '.roartwin-rename'; await fsp.rename(to, tmp); await fsp.rename(tmp, from) } else await fsp.rename(to, from)
-      done++
-    } catch (e) { failed.push({ name: m.to, error: String(e?.message || e) }) }
+  // each file must still be there under its new name; the old names must be free, or be the batch's own
+  const back = [], failed = []
+  const coming = new Set(moves.map((m) => m.to.toLowerCase()))
+  for (const m of moves) {
+    if (!(await exists(path.join(dir, m.to)))) { failed.push({ name: m.to, error: 'It is not there any more.' }); continue }
+    if (await exists(path.join(dir, m.from)) && !coming.has(m.from.toLowerCase()) && m.from.toLowerCase() !== m.to.toLowerCase()) { failed.push({ name: m.to, error: 'The old name is taken now.' }); continue }
+    back.push({ from: m.to, to: m.from })
   }
-  return { done, failed }
+  const r = await moveAll(dir, back)
+  return { done: r.moves.length, failed: [...failed, ...r.failed] }
 }
 
 function register(ctx) {
   const folders = new Set()
   const cache = new Map()
+  // the last batch, kept in the app's own folder, so Undo still works after the app was closed and opened again
+  const logFile = () => { try { return path.join(ctx.app.getPath('userData'), 'rename-undo.json') } catch { return '' } }
   let last = null
+  try { const f = logFile(); if (f && fs.existsSync(f)) { last = JSON.parse(fs.readFileSync(f, 'utf8')); if (last?.dir) folders.add(last.dir) } } catch { last = null }
+  const keep = () => { const f = logFile(); if (!f) return; try { if (last) fs.writeFileSync(f, JSON.stringify(last)); else fs.rmSync(f, { force: true }) } catch { /* not kept: Undo still works until the app closes */ } }
   const must = (p) => {
     const r = path.resolve(String(p || ''))
     if (!p || ![...folders].some((f) => inside(r, f))) throw new Error('Choose the folder first.')
@@ -176,19 +211,21 @@ function register(ctx) {
     if (!cache.has(dir)) cache.set(dir, await scan(dir))
     const rows = plan(cache.get(dir), rule, await names(dir))
     const r = await apply(dir, rows)
-    last = { dir, moves: r.moves, rows: rows.filter((x) => r.moves.some((m) => m.from === x.from)) }
+    last = r.moves.length ? { dir, moves: r.moves, at: Date.now() } : last
+    keep()
     cache.set(dir, await scan(dir))
     return { done: r.moves.length, failed: r.failed }
   })
   ctx.handle('rename-undo', async () => {
     if (!last) return { done: 0, failed: [] }
-    const r = await undo(last.dir, last.moves)
-    cache.set(last.dir, await scan(last.dir))
-    last = null
+    const dir = last.dir
+    const r = await undo(dir, last.moves)
+    last = null; keep()
+    if (cache.has(dir) || folders.has(dir)) cache.set(dir, await scan(dir).catch(() => []))
     return r
   })
-  ctx.handle('rename-last', async () => (last ? { dir: last.dir, moves: last.moves } : null))
+  ctx.handle('rename-last', async () => (last ? { dir: last.dir, count: last.moves.length, at: last.at || 0 } : null))
   ctx.handle('rename-csv', async ({ text }) => ctx.saveText(String(text || ''), 'Renamed clips.csv', 'csv'))
 }
 
-module.exports = { register, plan, apply, undo, scanFolder, metaOf, TOKENS }
+module.exports = { register, plan, apply, undo, moveAll, scanFolder, metaOf, TOKENS }
