@@ -271,7 +271,7 @@ function makeTool({ tar = findTar(), platform = process.platform, freeSpace = de
     const parent = dest || path.dirname(file)
     // room enough on the drive for what comes out (the listing says how much); a full drive is said before, not after
     const free = await freeSpace(parent)
-    if (free != null && info.size && info.size > free) throw new Error(`There is not room enough there: it needs ${human(info.size)}, the drive has ${human(free)} free.`)
+    if (free != null && info.size && info.size > free) throw new Error('There is not room enough on that drive for what is inside.')
     const folder = freeName(parent, baseOf(file))
     await fsp.mkdir(folder, { recursive: true })
     // the folder is the app's own, made just now: on Stop, or when nothing could come out, it goes again
@@ -376,7 +376,7 @@ function makeTool({ tar = findTar(), platform = process.platform, freeSpace = de
     }
     const prog = { bz2: 'bzip2', xz: 'xz', zst: 'zstd', lzma: 'xz' }[kind]
     const bin = platform === 'win32' ? '' : which(prog)
-    if (!bin) throw new Error(`Opening a single .${kind} file needs ${prog}, which this computer does not have.`)
+    if (!bin) throw new Error('Opening this single compressed file needs a program this computer does not have.')
     const fd = await fsp.open(out, 'wx')
     try {
       await new Promise((ok, no) => {
@@ -385,7 +385,7 @@ function makeTool({ tar = findTar(), platform = process.platform, freeSpace = de
         p.stdout.pipe(w)
         const watch = setInterval(() => { if (stop()) p.kill('SIGKILL') }, 250)
         p.on('error', (e) => { clearInterval(watch); no(e) })
-        p.on('close', (code) => { clearInterval(watch); if (stop()) no(new Stopped()); else if (code) no(new Error(`${prog} could not open it.`)); else w.end(ok) })
+        p.on('close', (code) => { clearInterval(watch); if (stop()) no(new Stopped()); else if (code) no(new Error('The archive is damaged or cut short: it was not downloaded or copied whole.')); else w.end(ok) })
       })
     } finally { await fd.close() }
   }
@@ -405,7 +405,7 @@ function makeTool({ tar = findTar(), platform = process.platform, freeSpace = de
     let done = 0
     const onLine = (l) => { if (l && !/^(tar|bsdtar)(\.exe)?: /.test(l) && !l.endsWith('/')) { done++; tick({ done: Math.min(done, total), total }) } }
     const free = await freeSpace(dir)
-    if (free != null && free < Math.min(size, 50e6)) throw new Error(`There is not room enough there: the drive has ${human(free)} free.`)
+    if (free != null && free < Math.min(size, 50e6)) throw new Error('There is not room enough on that drive.')
     const args = makeArgs({ format, level, out, items, junk, flavour: tar.flavour, platform, password })
     const r = await run(tar.bin, args, { stop, onLine, env: { ...(env || {}), ...(platform === 'darwin' && junk ? { COPYFILE_DISABLE: '1' } : {}) } })
     // the half archive is the app's own new file: it goes (no file of the person's is touched)
@@ -421,8 +421,6 @@ function makeTool({ tar = findTar(), platform = process.platform, freeSpace = de
 
   return { list, extract, test, make, tar }
 }
-// a size in words, for the messages from this side
-const human = (n) => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; n = Number(n) || 0; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++ } return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i] }
 // how much a drive has free (null when the computer does not say)
 async function defaultFree(dir) { try { const s = await fsp.statfs(dir); return Number(s.bavail) * Number(s.bsize) } catch { return null } }
 // tar's own words, without its name in front

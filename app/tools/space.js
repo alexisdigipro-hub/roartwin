@@ -21,13 +21,13 @@ function init(ctx) {
 const pickedSize = () => [...st.sel.values()].reduce((n, f) => n + f.size, 0)
 const dirOf = (p) => p.replace(/[\\/][^\\/]*$/, '')
 
-async function scan(ctx) {
+async function scan(ctx, withHidden) {
   if (!st.root) return
   st.busy = true; st.prog = null; st.sel.clear(); st.gone.clear(); st.old = null
   ctx.busy(true)
   const off = ctx.on('space-progress', (p) => { st.prog = p; if (Date.now() - lastDraw > 250) { lastDraw = Date.now(); ctx.draw() } })
   try {
-    const r = await ctx.call('space-scan', { root: st.root, skipHidden: ctx.S.opts.skipHidden, skipCloud: ctx.S.opts.skipCloud, protect: ctx.S.protect })
+    const r = await ctx.call('space-scan', { root: st.root, skipHidden: withHidden ? false : ctx.S.opts.skipHidden, skipCloud: ctx.S.opts.skipCloud, protect: ctx.S.protect })
     if (r?.stopped) ctx.toast(ctx.t('Stopped.'))
     else { st.res = r; st.node = r.node; st.trail = []; st.tab = 'folders' }
   } catch (e) { ctx.toast(ctx.err(e)) } finally { off?.(); st.busy = false; ctx.busy(false) }
@@ -166,6 +166,9 @@ function viewResult(ctx) {
     r.denied?.count ? h('button', { class: 'chip tint sp-chipbtn', style: { '--c': 'var(--warn)' }, title: r.denied.some.join('\n'), onclick: () => ctx.sheet(t('{n} could not be read', { n: plural(r.denied.count, 'folder') }),
       t('The computer did not let the app look inside them, so the sizes here leave them out. On a Mac: System Settings > Privacy & Security > Full Disk Access, switch on RoarKit, and map again.'), [[t('Close'), true, true]]) }, h('i'), t('{n} could not be read', { n: plural(r.denied.count, 'folder') })) : null,
     r.skipped?.length ? h('span', { class: 'chip', title: r.skipped.join('\n') }, t('Cloud left out: {n}', { n: r.skipped.length })) : null,
+    // the Library folders and the hidden ones are left out by Settings: often where the space went, so it says so
+    r.hidden ? h('button', { class: 'chip sp-chipbtn', title: t('Settings > Looking through folders > Skip hidden and system folders. Library folders (caches, app data) and hidden folders are left out of this map.'),
+      onclick: async () => { if (await ctx.sheet(t('Hidden and system folders left out'), t('Library folders (caches, app data, mail) and hidden folders often hold a lot of space. Map this drive again with them?'), [[t('Cancel'), false], [t('Map with them'), true, true]])) scan(ctx, true) } }, t('Hidden and system folders left out')) : null,
     h('span', { class: 'chip' }, t('in {t}', { t: dur(r.took / 1000) })))
   const body = st.tab === 'big' ? h('div', { class: 'sp-stack' }, h('div', { class: 'sum' }, chooser(ctx, r.big)), h('section', { class: 'group sp-list' }, ...r.big.map((f) => fileRow(ctx, f))))
     : st.tab === 'old' ? viewOld(ctx) : st.tab === 'kinds' ? viewKinds(ctx) : viewFolders(ctx)
@@ -251,6 +254,10 @@ export default {
     'Time Machine and macOS keep these copies of the drive from the last hours and days, so a file can be brought back even without the backup drive. macOS frees their space by itself when the drive needs it. To remove them now, paste this in Terminal (it asks for your Mac password):': 'Το Time Machine και το macOS κρατάνε αυτά τα αντίγραφα του δίσκου από τις τελευταίες ώρες και μέρες, για να γυρίσει πίσω ένα αρχείο ακόμα και χωρίς τον δίσκο του backup. Το macOS ελευθερώνει μόνο του τον χώρο τους όταν τον χρειαστεί ο δίσκος. Για να τα σβήσεις τώρα, κόλλησε αυτό στο Terminal (θα ζητήσει τον κωδικό του Mac):',
     '{n} could not be read': '{n} δεν διαβάστηκαν',
     'The computer did not let the app look inside them, so the sizes here leave them out. On a Mac: System Settings > Privacy & Security > Full Disk Access, switch on RoarKit, and map again.': 'Ο υπολογιστής δεν άφησε την εφαρμογή να κοιτάξει μέσα τους, οπότε τα μεγέθη εδώ δεν τους μετράνε. Σε Mac: Ρυθμίσεις συστήματος > Απόρρητο και ασφάλεια > Πλήρης πρόσβαση στον δίσκο, άνοιξε το RoarKit, και ξαναδές τον χάρτη.',
+    'Hidden and system folders left out': 'Χωρίς τους κρυφούς φακέλους και του συστήματος',
+    'Settings > Looking through folders > Skip hidden and system folders. Library folders (caches, app data) and hidden folders are left out of this map.': 'Ρυθμίσεις > Ψάξιμο στους φακέλους > Παράλειψη κρυφών φακέλων. Οι φάκελοι Library (cache, δεδομένα εφαρμογών) και οι κρυφοί φάκελοι λείπουν από αυτόν τον χάρτη.',
+    'Library folders (caches, app data, mail) and hidden folders often hold a lot of space. Map this drive again with them?': 'Οι φάκελοι Library (cache, δεδομένα εφαρμογών, mail) και οι κρυφοί φάκελοι συχνά πιάνουν πολύ χώρο. Να ξαναγίνει ο χάρτης μαζί τους;',
+    'Map with them': 'Χάρτης μαζί τους', 'Cancel': 'Άκυρο',
     'Home folder': 'Φάκελος χρήστη', 'This Mac': 'Αυτός ο Mac', 'This computer': 'Αυτός ο υπολογιστής',
     'The biggest {n} shown': 'Φαίνονται τα {n} μεγαλύτερα',
   },
@@ -273,7 +280,7 @@ export default {
   demo: {
     'space-scan': async (a, emit) => {
       for (let i = 1; i <= 8; i++) { emit('space-progress', { files: i * 5212, bytes: i * 61e9, dir: '/Volumes/RAID/Projects/2026/Shoot ' + i }); await new Promise((r) => setTimeout(r, 90)) }
-      return demoScan(a.root)
+      return { ...demoScan(a.root), hidden: a.skipHidden !== false }
     },
     'space-dir': async ({ path }) => demoNode(path),
     'space-old': async ({ minBytes, months }) => {
@@ -302,7 +309,7 @@ const DEMO_FILES = [
 ]
 function demoScan(root) {
   return {
-    root, took: 41200, size: 3.42e12, files: 48231, skipped: ['/Users/alex/pCloud Drive'], denied: { count: 3, some: ['/Volumes/RAID/.Spotlight-V100', '/Volumes/RAID/Clients/Private', '/Volumes/RAID/Archive/Locked'] },
+    root, took: 41200, size: 3.42e12, files: 48231, skipped: ['/Users/alex/pCloud Drive'], hidden: true, denied: { count: 3, some: ['/Volumes/RAID/.Spotlight-V100', '/Volumes/RAID/Clients/Private', '/Volumes/RAID/Archive/Locked'] },
     node: demoNode(R),
     big: [...DEMO_FILES].sort((a, b) => b.size - a.size),
     kinds: { video: { size: 1.41e12, count: 6120 }, raw: { size: 1.12e12, count: 9811 }, photo: { size: 0.21e12, count: 24010 }, audio: { size: 0.18e12, count: 5120 }, project: { size: 0.31e12, count: 210 }, archive: { size: 0.12e12, count: 88 }, other: { size: 0.07e12, count: 2872 } },

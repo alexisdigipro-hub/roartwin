@@ -53,3 +53,5 @@ html[data-theme="light"] .st-grid { --st-up: #0a84ff; --st-gpu: #8e44d9; }
 .st-hist { display: grid; gap: 4px; padding-top: 6px; border-top: 1px solid var(--line); }
 .st-hist small { color: var(--dim); font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
 .st-hist .st-row b { font-weight: 500; font-size: 12px; }
+.st-hist .st-row span { flex: none; }
+.st-hist .st-row b { overflow: hidden; text-overflow: ellipsis; }

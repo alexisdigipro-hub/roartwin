@@ -236,7 +236,7 @@ function register(ctx) {
     const view = nodeView(r.root)
     const big = biggest(r.files).map(mark)
     ctx.allow(root, view.kids.map((k) => k.path), view.loose.map((f) => f.path), big.map((f) => f.path))
-    return { root, took: Date.now() - t0, size: r.root.size, files: r.files.length, skipped: r.skipped, denied: { count: r.denied.length, some: r.denied.slice(0, 12) }, node: { ...view, loose: view.loose.map(mark) }, big, kinds: byKind(r.files), volume: await volumeOf(root) }
+    return { root, took: Date.now() - t0, size: r.root.size, files: r.files.length, skipped: r.skipped, denied: { count: r.denied.length, some: r.denied.slice(0, 12) }, hidden: a.skipHidden !== false, node: { ...view, loose: view.loose.map(mark) }, big, kinds: byKind(r.files), volume: await volumeOf(root) }
   }))
   ctx.handle('space-dir', (a) => {
     const node = last && findNode(last.root, String(a.path || ''))

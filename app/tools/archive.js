@@ -66,7 +66,7 @@ function askPassword(ctx, wrong, name = '') {
 /* ---------- Open ---------- */
 async function openArchive(ctx, p, password = '') {
   if (!p) return
-  A.done = null; A.info = null; A.dest = ''; A.shown = 200; A.tested = null; A.batch = null
+  A.done = null; A.info = null; A.dest = ''; A.shown = 200; A.tested = null; A.batch = null; A.queue = []
   if (!password) A.pw = ''
   try {
     const r = await job(ctx, 'archive-list', { path: p, password })
@@ -302,7 +302,7 @@ function viewMake(ctx) {
 
 export default {
   // back and forward (app.js): what makes this tool's screen
-  nav: { get: () => ({ mode: A.mode, info: A.info, done: A.done }), set: (s) => { Object.assign(A, s) } },
+  nav: { get: () => ({ mode: A.mode, info: A.info, done: A.done, queue: A.queue, batch: A.batch, tested: A.tested }), set: (s) => { Object.assign(A, s); A.pw = '' } },
   id: 'archive',
   top(ctx) {
     init(ctx)
@@ -387,6 +387,9 @@ export default {
     'The drive is full. Free some space, or choose another place for it.': 'Ο δίσκος γέμισε. Άδειασε λίγο χώρο, ή διάλεξε άλλο σημείο.',
     'This app may not write there. Choose another place.': 'Η εφαρμογή δεν μπορεί να γράψει εκεί. Διάλεξε άλλο σημείο.',
     'This computer cannot make that kind. Choose ZIP or TAR.GZ.': 'Αυτός ο υπολογιστής δεν φτιάχνει αυτό το είδος. Διάλεξε ZIP ή TAR.GZ.',
+    'There is not room enough on that drive for what is inside.': 'Δεν χωράει σε αυτόν τον δίσκο ό,τι έχει μέσα.',
+    'There is not room enough on that drive.': 'Δεν υπάρχει αρκετός χώρος σε αυτόν τον δίσκο.',
+    'Opening this single compressed file needs a program this computer does not have.': 'Για να ανοίξει αυτό το μεμονωμένο συμπιεσμένο αρχείο χρειάζεται ένα πρόγραμμα που δεν έχει αυτός ο υπολογιστής.',
     'Only a ZIP can have a password.': 'Κωδικό μπορεί να έχει μόνο ένα ZIP.',
     "This computer's tar cannot lock a ZIP with a password.": 'Το tar αυτού του υπολογιστή δεν μπορεί να κλειδώσει ZIP με κωδικό.',
     'This archive has entries that would land outside the folder, and too many entries to leave them out one by one.': 'Αυτό το αρχείο έχει περιεχόμενα που θα έβγαιναν έξω από τον φάκελο, και είναι πάρα πολλά για να παραλειφθούν ένα ένα.',

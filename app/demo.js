@@ -87,7 +87,8 @@ export function demoTwin() {
     // Clean up: a Mac's caches, measured one by one
     cleanLook: async () => {
       const got = [
-        { id: 'resolve', name: 'DaVinci Resolve render cache', what: 'CacheClip: the frames Resolve renders to play smoothly. Made again when needed.', on: true, size: 86.4e9, files: 21840, count: 312, found: ['/Users/alex/Movies/CacheClip'], open: [] },
+        { id: 'resolve', name: 'DaVinci Resolve render cache', what: 'CacheClip: the frames Resolve renders to play smoothly. Made again when needed.', on: true, size: 86.4e9, files: 21840, count: 312, found: ['/Users/alex/Movies/CacheClip'], open: [],
+          top: [{ path: '/Users/alex/Movies/CacheClip/Fakinos_Mataria', name: 'Fakinos_Mataria', size: 41.2e9 }, { path: '/Users/alex/Movies/CacheClip/Spring campaign', name: 'Spring campaign', size: 22.9e9 }, { path: '/Users/alex/Movies/CacheClip/Showreel 2026', name: 'Showreel 2026', size: 9.4e9 }] },
         { id: 'resolve-logs', name: 'DaVinci Resolve logs', what: 'Old log files Resolve writes for its support team.', on: true, size: 0.9e9, files: 412, count: 40, found: ['/Users/alex/Library/Application Support/Blackmagic Design/DaVinci Resolve/logs'], open: [] },
         { id: 'adobe-media', name: 'Adobe media cache', what: 'Premiere Pro, After Effects, Media Encoder and Audition: the conformed audio and indexes of every clip ever imported. Made again when a project opens.', on: true, size: 41.2e9, files: 9120, count: 9120, found: ['/Users/alex/Library/Application Support/Adobe/Common/Media Cache Files'], open: ['Adobe Premiere Pro'] },
         { id: 'adobe-team', name: 'Adobe Team Projects cache', what: 'Local copies of Premiere and After Effects team projects.', on: false, size: 0, files: 0, count: 0, found: [], open: [] },

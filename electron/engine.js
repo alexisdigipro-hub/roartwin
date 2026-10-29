@@ -97,6 +97,8 @@ async function list(roots, opts, tick, stop, skipped = []) {
       }
       if (!e.isFile()) continue
       if (opts.skipHidden && e.name.startsWith('.')) continue
+      // a card copied whole keeps its hidden files (a camera may write some); only what a Mac leaves behind stays out
+      if (opts.card && (e.name === '.DS_Store' || e.name.startsWith('._'))) continue
       const only = KIND[opts.kind || (opts.videosOnly ? 'video' : 'all')]
       if (only && !only(e.name)) continue
       let st
@@ -667,7 +669,9 @@ async function makeTwin(opts, tick = () => {}, stop = () => false) {
   // CamA_Card03), each part made safe for Mac and Windows
   const named = String(opts.folder || '').split(/[\\/]+/).map((x) => x.replace(/[:*?"<>|\x00-\x1f]/g, '-').replace(/^\.+/, '').trim()).filter(Boolean)
   const name = named.length ? path.join(...named) : path.basename(source) || 'Copy'
-  const files = await list([source], { skipHidden: opts.skipHidden !== false, skipCloud: false, keepEmpty: true }, tick, stop, [])
+  // the whole card, hidden files too, whatever "Skip hidden and system folders" says (28 Oct: a backup leaves nothing out;
+  // only a Mac's own leftovers, .DS_Store, ._ files, .Spotlight and the like, stay out)
+  const files = await list([source], { skipHidden: false, skipCloud: false, keepEmpty: true, card: true }, tick, stop, [])
   const bytesTotal = files.reduce((a, f) => a + f.size, 0)
   // room on every drive first
   for (const t of targets) {

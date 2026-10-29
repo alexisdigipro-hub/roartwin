@@ -2,9 +2,9 @@
 // clashes refused, Undo for the last batch, the list as a CSV. The names are worked out on the Mac/Windows side
 // (electron/tools/rename.js); in a browser `demo` stands in with a made-up card.
 
-const DEFAULT = { pattern: '{date}_{project}_{cam}{card}_{n}', project: '', cam: 'A', card: '', start: 1, pad: 3, dateFormat: 'YYYY-MM-DD', dateFrom: 'clip', case: 'keep', kind: 'video' }
+const DEFAULT = { pattern: '{date}_{project}_{cam}{card}_{n}', project: '', cam: 'A', card: '', start: 1, pad: 3, dateFormat: 'YYYY-MM-DD', dateFrom: 'clip', case: 'keep', kind: 'video', perDay: false }
 const TOKENS = [['date', 'The day it was shot'], ['time', 'The time, HHMMSS'], ['project', 'Project'], ['cam', 'Camera letter'], ['card', 'Card'], ['n', 'A counter'], ['name', 'Its name now'], ['tc', 'Start timecode'], ['camera', 'Camera make and model'], ['reel', 'Reel'], ['ext', 'The extension']]
-const R = { ready: false, dir: '', only: [], rows: [], rule: { ...DEFAULT }, busy: false, progress: null, canUndo: false, err: '' }
+const R = { ready: false, dir: '', only: [], rows: [], rule: { ...DEFAULT }, busy: false, progress: null, canUndo: false, err: '', last: null, presets: [], naming: '' }
 let C = null
 let timer = 0
 
@@ -26,6 +26,10 @@ async function previewNow() {
   const go = document.querySelector('.top .rn-go')
   if (go) { const n = counts().ok || 0; go.disabled = R.busy || !n || problems() > 0; go.title = problems() ? C.t('Some names clash or are taken. Change the rule first.') : ''; go.lastChild.textContent = C.t('Rename {n}', { n: C.num(n) }) }
 }
+async function lastBatch() {
+  try { R.last = await C.call('rename-last') } catch { R.last = null }
+  R.canUndo = !!R.last?.count
+}
 async function useFolder(got) {
   if (!got) return
   R.dir = got.path; R.only = got.only || []; R.canUndo = false; R.rows = []; R.asked = false
@@ -42,7 +46,7 @@ async function apply() {
   if (!ok) return
   try {
     const r = await C.call('rename-apply', { path: R.dir, rule: { ...R.rule, only: R.only } })
-    R.canUndo = r.done > 0
+    await lastBatch()
     // the files chosen by hand now have their new names
     if (R.only.length) R.only = R.rows.filter((x) => x.status === 'ok' || x.status === 'same').map((x) => (x.status === 'ok' ? x.to : x.from))
     C.toast(r.failed.length ? t('{n} renamed, {m} could not be: {e}', { n: num(r.done), m: num(r.failed.length), e: t(r.failed[0].error) }) : t('{n} renamed', { n: num(r.done) }))
@@ -53,7 +57,7 @@ async function undo() {
   try {
     const r = await C.call('rename-undo')
     if (R.only.length) R.only = []
-    R.canUndo = false
+    await lastBatch()
     C.toast(r.failed.length ? C.t('{n} put back, {m} could not be: {e}', { n: C.num(r.done), m: C.num(r.failed.length), e: C.t(r.failed[0].error) }) : C.t('{n} put back', { n: C.num(r.done) }))
   } catch (e) { C.toast(C.err(e)) }
   await previewNow(); C.draw()
@@ -62,6 +66,26 @@ async function csv() {
   const q = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`
   const rows = [[C.t('Old name'), C.t('New name'), C.t('Status')].map(q).join(','), ...R.rows.map((r) => [r.from, r.to, C.t(STATUS[r.status]?.[0] || r.status)].map(q).join(','))]
   try { if (await C.call('rename-csv', { text: rows.join('\r\n') })) C.toast(C.t('List saved')) } catch (e) { C.toast(C.err(e)) }
+}
+
+/* saved rules (29 Oct): a name, the rule; click to use it again on the next card */
+const RULE_KEYS = ['pattern', 'project', 'cam', 'card', 'start', 'pad', 'dateFormat', 'dateFrom', 'case', 'kind', 'perDay']
+const ruleOf = (r) => Object.fromEntries(RULE_KEYS.map((k) => [k, r[k]]))
+function presetsEl(ctx) {
+  const { h, t, I } = ctx
+  const keepPresets = () => ctx.save('rename', 'presets', R.presets)
+  const saveIt = () => {
+    const name = R.naming.trim()
+    if (!name) return
+    R.presets = [...R.presets.filter((x) => x.name !== name), { name, rule: ruleOf(R.rule) }]
+    R.naming = ''; keepPresets(); ctx.toast(t('Rule kept as {n}', { n: name })); ctx.draw()
+  }
+  const input = h('input', { value: R.naming, placeholder: t('Name this rule'), 'aria-label': t('Name this rule'), oninput: (e) => { R.naming = e.target.value }, onkeydown: (e) => { if (e.key === 'Enter') saveIt() } })
+  return h('div', { class: 'rn-presets' },
+    R.presets.length ? h('small', { class: 'muted' }, t('Saved rules')) : null,
+    ...R.presets.map((x) => h('span', { class: 'chip rn-preset', title: x.rule.pattern, role: 'button', tabindex: '0', onclick: () => { R.rule = { ...DEFAULT, ...x.rule }; save(); ctx.draw(); previewNow() } }, x.name,
+      h('button', { 'aria-label': t('Forget {n}', { n: x.name }), title: t('Forget {n}', { n: x.name }), html: I.x, onclick: (e) => { e.stopPropagation(); R.presets = R.presets.filter((y) => y !== x); keepPresets(); ctx.draw() } }))),
+    h('span', { class: 'rn-save' }, input, h('button', { class: 'btn', onclick: saveIt }, t('Keep this rule'))))
 }
 
 function sumEl(ctx) {
@@ -78,6 +102,7 @@ function tableEl(ctx) {
   const { h, t } = ctx
   if (R.err) return h('div', { class: 'rn-table' }, h('p', { class: 'note' }, R.err))
   if (!R.rows.length) return h('div', { class: 'rn-table' }, h('p', { class: 'note' }, t('No files of that kind in this folder.')))
+  const more = R.rows.length > 2000 ? h('p', { class: 'rn-more' }, t('Showing the first {n} of {m}; all of them are renamed.', { n: ctx.num(2000), m: ctx.num(R.rows.length) })) : null
   return h('div', { class: 'rn-table' }, ...R.rows.slice(0, 2000).map((r) => {
     const [label, c] = STATUS[r.status] || ['', 'var(--dim)']
     return h('div', { class: 'rn-row ' + r.status },
@@ -85,13 +110,13 @@ function tableEl(ctx) {
       h('span', { class: 'rn-arrow', 'aria-hidden': 'true' }, '→'),
       h('span', { class: 'rn-to', title: r.to }, r.status === 'same' ? '' : r.to || '—'),
       h('span', { class: 'chip tint', style: { '--c': c } }, h('i'), t(label)))
-  }))
+  }), more)
 }
 
 function view(ctx) {
   C = ctx
   const { h, t, ico, I, seg } = ctx
-  if (!R.ready) { R.ready = true; R.rule = { ...DEFAULT, ...ctx.load('rename', 'rule', {}) } }
+  if (!R.ready) { R.ready = true; R.rule = { ...DEFAULT, ...ctx.load('rename', 'rule', {}) }; R.presets = ctx.load('rename', 'presets', []); lastBatch().then(() => { if (R.canUndo) C.draw() }) }
   const set = (k, v, redraw) => { R.rule[k] = v; save(); if (redraw) { C.draw(); previewNow() } else later() }
   if (!R.dir) {
     const drop = ctx.dropOn(h('div', { class: 'drop' }, h('div', { class: 'dz-i', html: I.rename }), h('b', {}, t('Drop a folder of clips here, or some of its files')),
@@ -129,7 +154,10 @@ function view(ctx) {
       opt(t('Which files'), seg([['video', t('Videos')], ['image', t('Photos')], ['audio', t('Sound')], ['all', t('All')]], r.kind, (v) => set('kind', v, true))),
       opt(t('The date from'), seg([['clip', t('The clip itself')], ['file', t('The file')]], r.dateFrom, (v) => set('dateFrom', v, true))),
       opt(t('Date as'), seg([['YYYY-MM-DD', '2026-10-28'], ['YYYYMMDD', '20261028'], ['YYMMDD', '261028'], ['DD-MM-YYYY', '28-10-2026']], r.dateFormat, (v) => set('dateFormat', v, true))),
-      opt(t('Letters'), seg([['keep', t('As written')], ['upper', 'ABC'], ['lower', 'abc']], r.case, (v) => set('case', v, true)))),
+      opt(t('Letters'), seg([['keep', t('As written')], ['upper', 'ABC'], ['lower', 'abc']], r.case, (v) => set('case', v, true))),
+      h('div', { class: 'opt' }, h('span', {}, h('b', {}, t('Counter from the start each day')), h('small', {}, t('A card of three shooting days: each day starts again from the first number.'))),
+        ctx.switchEl(!!r.perDay, (v) => set('perDay', v, true), t('Counter from the start each day'))),
+      presetsEl(ctx)),
     sumEl(ctx),
     tableEl(ctx)))
 }
@@ -139,7 +167,7 @@ function top(ctx) {
   const c = counts()
   return [h('div', { class: 'title' }, t('Rename clips')), h('div', { class: 'spacer' }),
     R.dir ? h('button', { class: 'btn', disabled: R.busy, onclick: async () => useFolder(await ctx.call('rename-pick').catch(() => null)) }, ico('folder'), h('span', { class: 'lbl' }, t('Another folder…'))) : null,
-    R.canUndo ? h('button', { class: 'btn', disabled: R.busy, onclick: undo }, ico('back'), h('span', { class: 'lbl' }, t('Undo last'))) : null,
+    R.canUndo ? h('button', { class: 'btn', disabled: R.busy, title: R.last ? t('{n} files in {f}', { n: ctx.num(R.last.count), f: R.last.dir.split(/[\\/]/).filter(Boolean).pop() || R.last.dir }) : '', onclick: undo }, ico('back'), h('span', { class: 'lbl' }, t('Undo last'))) : null,
     R.rows.length ? h('button', { class: 'btn', disabled: R.busy, onclick: csv, title: t('Save the list (CSV)') }, ico('out'), h('span', { class: 'lbl' }, t('Save list'))) : null,
     R.dir ? h('button', { class: 'btn main rn-go', disabled: R.busy || !c.ok || problems() > 0, title: problems() ? t('Some names clash or are taken. Change the rule first.') : '', onclick: apply }, ico('rename'), t('Rename {n}', { n: ctx.num(c.ok || 0) })) : null]
 }
@@ -153,10 +181,15 @@ function demoPlan(rule) {
   const only = r.only?.length ? new Set(r.only) : null
   const DATE = { 'YYYY-MM-DD': (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, YYYYMMDD: (d) => `${d.getFullYear()}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`, YYMMDD: (d) => `${String(d.getFullYear()).slice(2)}${pad2(d.getMonth() + 1)}${pad2(d.getDate())}`, 'DD-MM-YYYY': (d) => `${pad2(d.getDate())}-${pad2(d.getMonth() + 1)}-${d.getFullYear()}` }
   const sel = CARD.filter((f) => (r.kind === 'all' || f.kind === r.kind) && (!only || only.has(f.name))).sort((a, b) => a.t - b.t)
-  const rows = sel.map((f, i) => {
+  let day = '', k = 0
+  const rows = sel.map((f) => {
     const d = new Date(f.t), ext = f.name.split('.').pop(), base = f.name.slice(0, -ext.length - 1)
+    const today = DATE['YYYY-MM-DD'](d)
+    if (r.perDay && today !== day) { day = today; k = 0 }
+    const i = k++
     const v = { date: (DATE[r.dateFormat] || DATE['YYYY-MM-DD'])(d), time: `${pad2(d.getHours())}${pad2(d.getMinutes())}${pad2(d.getSeconds())}`, project: r.project, cam: r.cam, card: r.card, n: String((Number(r.start) || 0) + i).padStart(Math.max(1, Number(r.pad) || 1), '0'), name: base, ext, tc: f.tc.replace(/:/g, ''), camera: f.camera, reel: '' }
-    let n = String(r.pattern).replace(/\{(\w+)\}/g, (a, k) => (k in v ? v[k] : a)).replace(/[\\/:*?"<>|]+/g, ' ').replace(/([_\-. ])[_\-. ]*(?=[_\-. ])/g, '').replace(/^[_\-. ]+|[_\-. ]+$/g, '').trim()
+    let n = String(r.pattern).replace(/\{(\w+)\}/g, (a, key) => (key in v ? (String(v[key] ?? '').trim() || '\u0001') : a)).replace(/([_\-. ]*)\u0001+([_\-. ]*)/g, (m, x, y) => x || y)
+      .replace(/[\\/:*?"<>|]+/g, ' ').replace(/^[_\-. ]+|[_\-. ]+$/g, '').trim()
     if (r.case === 'upper') n = n.toUpperCase(); else if (r.case === 'lower') n = n.toLowerCase()
     const to = !n ? '' : /\{ext\}/.test(r.pattern) ? n : `${n}.${ext}`
     return { from: f.name, to, status: !to ? 'empty' : to === f.name ? 'same' : 'ok' }
@@ -175,6 +208,7 @@ const demo = {
   'rename-apply': async ({ rule }) => { const rows = demoPlan(rule).filter((x) => x.status === 'ok'); rows.forEach((x) => { const f = CARD.find((c) => c.name === x.from); f.was = f.name; f.name = x.to }); return { done: rows.length, failed: [] } },
   'rename-undo': async () => { let n = 0; CARD.forEach((f) => { if (f.was) { f.name = f.was; delete f.was; n++ } }); return { done: n, failed: [] } },
   'rename-csv': async () => '/Users/alex/Desktop/Renamed clips.csv',
+  'rename-last': async () => (CARD.some((f) => f.was) ? { dir: '/Volumes/FX6_CARD_A/PRIVATE/M4ROOT/CLIP', count: CARD.filter((f) => f.was).length, at: Date.now() } : null),
 }
 
 const el = {
@@ -192,6 +226,9 @@ const el = {
   Stop: 'Διακοπή', 'The rule': 'Ο κανόνας', Project: 'Project', Camera: 'Κάμερα', Card: 'Κάρτα', 'Counter from': 'Αρίθμηση από', Digits: 'Ψηφία', Remove: 'Αφαίρεση', '{n} files chosen': '{n} αρχεία επιλεγμένα',
   'Which files': 'Ποια αρχεία', Videos: 'Βίντεο', Photos: 'Φωτογραφίες', Sound: 'Ήχος', All: 'Όλα', 'The date from': 'Η ημερομηνία από', 'The clip itself': 'Το ίδιο το clip', 'The file': 'Το αρχείο', 'Date as': 'Ημερομηνία ως', Letters: 'Γράμματα', 'As written': 'Όπως γράφτηκαν',
   'Rename clips': 'Μετονομασία clips', 'Another folder…': 'Άλλος φάκελος…', 'Undo last': 'Αναίρεση', 'Save the list (CSV)': 'Αποθήκευση λίστας (CSV)', 'Save list': 'Αποθήκευση λίστας', 'Rename {n}': 'Μετονομασία {n}',
+  'Counter from the start each day': 'Αρίθμηση από την αρχή κάθε μέρα', 'A card of three shooting days: each day starts again from the first number.': 'Μια κάρτα τριών ημερών γυρίσματος: κάθε μέρα ξεκινάει ξανά από τον πρώτο αριθμό.',
+  'Saved rules': 'Αποθηκευμένοι κανόνες', 'Name this rule': 'Όνομα για τον κανόνα', 'Keep this rule': 'Κράτα τον κανόνα', 'Rule kept as {n}': 'Ο κανόνας κρατήθηκε ως {n}', 'Forget {n}': 'Ξέχασε το {n}',
+  'Showing the first {n} of {m}; all of them are renamed.': 'Φαίνονται τα πρώτα {n} από {m}· μετονομάζονται όλα.', '{n} files in {f}': '{n} αρχεία στο {f}', 'It is not there any more.': 'Δεν υπάρχει πια.', 'That name is taken.': 'Το όνομα υπάρχει ήδη.',
   'Some names clash or are taken. Change the rule first.': 'Κάποια ονόματα συγκρούονται ή υπάρχουν ήδη. Άλλαξε πρώτα τον κανόνα.', 'Choose the folder first.': 'Διάλεξε πρώτα τον φάκελο.', 'The old name is taken now.': 'Το παλιό όνομα το έχει πια άλλο αρχείο.',
 }
 
