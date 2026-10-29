@@ -31,6 +31,14 @@ contextBridge.exposeInMainWorld('twin', {
   onTool: (name, fn) => on('tool:' + String(name))(fn),
   // Settings the Mac/Windows side needs (Alex, 28 Oct): the look of its own windows, the end-of-job notification, the company for the MHL
   prefs: (v) => ipcRenderer.invoke('twin:prefs', v),
+  // Do by itself (Alex, 29 Oct): the jobs RoarKit runs on its own, their log; the menu bar icon
+  jobs: {
+    get: () => ipcRenderer.invoke('twin:jobs'),
+    set: (cfg) => ipcRenderer.invoke('twin:jobs-set', cfg),
+    run: (id) => ipcRenderer.invoke('twin:jobs-run', String(id)),
+    on: on('twin:jobs'),
+  },
+  trayOn: () => ipcRenderer.invoke('twin:tray'),
   update: {
     state: () => ipcRenderer.invoke('twin:update-state'),
     check: () => ipcRenderer.invoke('twin:update-check'),

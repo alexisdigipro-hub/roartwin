@@ -90,6 +90,7 @@ fs.writeFileSync(at('pCloud Drive/notes.txt'), 'call sheet day 1\n'.repeat(500))
   await assert.rejects(scan({ roots: [root], similar: true, ffmpeg: bin }, () => {}, () => true), Stopped)
 
   await more()
+  await stills()
   fs.rmSync(root, { recursive: true, force: true })
   console.log('engine: all good')
 })().catch((e) => { console.error(e); fs.rmSync(root, { recursive: true, force: true }); process.exit(1) })
@@ -217,4 +218,69 @@ async function more() {
     fs.writeFileSync(at2('vol/BMPCC/A001_C001.braw'), 'x'); fs.writeFileSync(at2('vol/DOCS/letters/a.txt'), 'x')
     assert.ok(await looksLikeCard(at2('vol/SONY'))); assert.ok(await looksLikeCard(at2('vol/BMPCC'))); assert.ok(!(await looksLikeCard(at2('vol/DOCS'))))
   } finally { fs.rmSync(r2, { recursive: true, force: true }) }
+}
+
+/* Similar photos (Alex, 29 Oct): burst shots and near-identical stills, a RAW through its preview, the one to keep */
+async function stills() {
+  const e = require('../electron/engine')
+  const r4 = fs.mkdtempSync(path.join(os.tmpdir(), 'roarkit-stills-'))
+  const at4 = (...p) => { const f = path.join(r4, ...p); fs.mkdirSync(path.dirname(f), { recursive: true }); return f }
+  const make4 = (args, out) => execFileSync(bin, ['-hide_banner', '-loglevel', 'error', '-y', ...args, at4(out)])
+  try {
+    make4(['-f', 'lavfi', '-i', 'mandelbrot=size=2000x1500', '-frames:v', '1'], 'src/base.png')
+    make4(['-i', at4('src/base.png'), '-q:v', '2'], 'burst/IMG_1001.jpg')
+    // the same shot, out of focus, and newer: not the one kept
+    make4(['-i', at4('src/base.png'), '-vf', 'gblur=sigma=4', '-q:v', '2'], 'burst/IMG_1002.jpg')
+    // the next shot of the burst: the camera moved a little, a touch brighter; saved smaller
+    make4(['-i', at4('src/base.png'), '-vf', 'crop=1900:1425:60:50,scale=1600:1200,eq=brightness=0.04', '-q:v', '3'], 'burst/IMG_1003.jpg')
+    make4(['-i', at4('src/base.png'), '-vf', 'scale=1000:750', '-c:v', 'tiff'], 'burst/IMG_1004.tif')
+    // a camera RAW: sensor data and a small thumbnail around the JPEG preview the camera put in it
+    make4(['-i', at4('src/base.png'), '-vf', 'scale=1200:900', '-q:v', '3'], 'src/preview.jpg')
+    make4(['-i', at4('src/base.png'), '-vf', 'scale=160:120', '-q:v', '5'], 'src/thumb.jpg')
+    // a lossless JPEG (as a RAW's sensor data) that says it is bigger: no picture, left out
+    const lossless = Buffer.from([0xff, 0xd8, 0xff, 0xc3, 0, 11, 8, 0x0f, 0xa0, 0x17, 0x70, 1, 1, 0x11, 0, 0xff, 0xda, 0, 8, 1, 1, 0, 0, 0x3f, 0, 1, 2, 3, 0xff, 0x00, 4, 0xff, 0xd9])
+    const raw = Buffer.concat([Buffer.from('II*\0'), crypto.randomBytes(5000), lossless, crypto.randomBytes(3000), fs.readFileSync(at4('src/thumb.jpg')), crypto.randomBytes(7000), fs.readFileSync(at4('src/preview.jpg')), crypto.randomBytes(20000)])
+    fs.writeFileSync(at4('burst/IMG_1005.NEF'), raw)
+    // other pictures: another place of the same set, the shot mirrored, a test card
+    make4(['-f', 'lavfi', '-i', 'mandelbrot=size=2000x1500:start_x=-0.75:start_y=0.1:start_scale=0.5', '-frames:v', '1'], 'burst/other.png')
+    make4(['-i', at4('src/base.png'), '-vf', 'hflip', '-q:v', '3'], 'burst/mirrored.jpg')
+    make4(['-f', 'lavfi', '-i', 'testsrc2=size=2000x1500', '-frames:v', '1'], 'burst/card.png')
+    const old = new Date('2026-01-01'), newer = new Date('2026-06-01')
+    for (const f of ['IMG_1001.jpg', 'IMG_1003.jpg', 'IMG_1004.tif', 'IMG_1005.NEF']) fs.utimesSync(at4('burst', f), old, old)
+    fs.utimesSync(at4('burst/IMG_1002.jpg'), newer, newer)
+
+    // the preview inside the RAW: the biggest viewable JPEG, whole
+    const j = e.largestJpeg(raw)
+    assert.deepStrictEqual([j.w, j.h], [1200, 900], 'the preview, not the thumbnail or the lossless data')
+    assert.ok(raw.subarray(j.start, j.end).equals(fs.readFileSync(at4('src/preview.jpg'))), 'the whole preview, byte for byte')
+    assert.strictEqual(e.largestJpeg(crypto.randomBytes(4000)), null)
+    // sharpness: edges score higher than a blur of them, flat scores nothing
+    const grey = (w, h, fn) => Uint8Array.from({ length: w * h }, (_, i) => fn(i % w, Math.floor(i / w)))
+    const sharpBars = grey(64, 64, (x) => (x % 8 < 4 ? 30 : 220)), softBars = grey(64, 64, (x) => 125 + 95 * Math.sin((x / 8) * 2 * Math.PI))
+    assert.ok(e.sharpness(sharpBars, 64, 64) > e.sharpness(softBars, 64, 64) * 4)
+    assert.strictEqual(e.sharpness(grey(64, 64, () => 128), 64, 64), 0)
+    assert.strictEqual(e.phash(grey(64, 64, () => 99)), null, 'a flat picture has no fingerprint')
+
+    const r = await scan({ roots: [at4('burst')], kind: 'image', photos: true, ffmpeg: bin, skipHidden: true })
+    const groups = r.groups.filter((g) => g.kind === 'photo')
+    const names = (g) => g.files.map((f) => f.name).sort()
+    console.log(groups.map((g) => 'photo: ' + names(g).join(' | ') + ' · keep ' + g.files.find((f) => f.keep).name).join('\n'))
+    assert.deepStrictEqual(groups.map(names), [['IMG_1001.jpg', 'IMG_1002.jpg', 'IMG_1003.jpg', 'IMG_1004.tif', 'IMG_1005.NEF']], 'the burst, the resized, the RAW; not the others')
+    const g = groups[0], by = Object.fromEntries(g.files.map((f) => [f.name, f]))
+    assert.strictEqual(g.files.find((f) => f.keep).name, 'IMG_1001.jpg', 'the most pixels, then the sharpest (not the newer blurred one)')
+    assert.ok(by['IMG_1001.jpg'].sharp > by['IMG_1002.jpg'].sharp * 2, 'the blurred one is less sharp')
+    assert.deepStrictEqual(by['IMG_1005.NEF'].dims, { w: 1200, h: 900 }, 'a RAW measured by its preview')
+    assert.ok(by['IMG_1005.NEF'].thumb.startsWith('data:image/jpeg'), 'a RAW gets a preview picture')
+    assert.ok(!fs.readdirSync(os.tmpdir()).some((n) => n.startsWith(`roarkit-photo-${process.pid}-`)), 'no temp copy is left behind')
+    // equal pixels and sharpness: the newest stays
+    fs.copyFileSync(at4('src/base.png'), at4('same/a.png'))
+    make4(['-i', at4('src/base.png'), '-compression_level', '1'], 'same/b.png')
+    fs.utimesSync(at4('same/a.png'), old, old); fs.utimesSync(at4('same/b.png'), newer, newer)
+    const rs = await scan({ roots: [at4('same')], kind: 'image', ffmpeg: bin })
+    assert.strictEqual(rs.groups.length, 1)
+    assert.strictEqual(rs.groups[0].files.find((f) => f.keep).name, 'b.png', 'the newest, when nothing else tells them apart')
+    // Masters: a burst in a Masters folder keeps its own, and nothing of it is chosen
+    const rm = await scan({ roots: [at4('burst')], protect: [at4('burst')], kind: 'image', ffmpeg: bin })
+    assert.ok(rm.groups.filter((x) => x.kind === 'photo').every((x) => x.files.every((f) => f.protected)))
+  } finally { fs.rmSync(r4, { recursive: true, force: true }) }
 }

@@ -3,7 +3,7 @@
 A utility of many tools for film people, Mac and Windows (The Mad Lions Lab). A side menu, one tool a page, Settings
 (language, skip hidden and cloud folders) for all of them. Nothing is ever deleted for good: what goes, goes to the Trash.
 
-## The tools (28 Oct 2026)
+## The tools (29 Oct 2026)
 - **Space:** Space map (every folder by size, the biggest files, space by kind, large and old files, a Mac's local
   snapshots), Clean up (below), Project leftovers (old Resolve optimized/proxy media, Premiere previews, After Effects
   cache, Final Cut render files, by project and age), Find twins (below).
@@ -17,7 +17,8 @@ A utility of many tools for film people, Mac and Windows (The Mad Lions Lab). A 
 - **Drives:** Drive health (SMART, free space, bus, last check against a copy report), Disk speed test (write and read,
   then which ProRes, BRAW and H.264/H.265 rates the drive can take).
 - **Computer:** Computer stats (processor per core, memory and pressure, swap, drives, network now, heat level and
-  battery, the heaviest programs, an internet speed test through Cloudflare).
+  battery, the heaviest programs, an internet speed test through Cloudflare), Startup items (below), Uninstall apps
+  (below).
 - **Private:** Vault (passwords, AES-256-GCM with a scrypt key from one master password, only on this computer, locks
   itself, copies clear the clipboard after 30 s, generator, encrypted backup, import from browsers' CSV).
 
@@ -26,11 +27,50 @@ workflow's names; 0.3.0's updater takes any name and puts RoarKit.app in place o
 purpose, so nothing installed or saved breaks: the bundle id com.themadlions.roartwin, the settings folder (main.js
 setPath), the repository (updater REPO), the copy reports' file names (`_RoarTwin copy report …csv`, read back by
 Check a backup and Drive health), the hidden work files (.roartwin-part and the like), and the RoarTwin-*.dmg/exe
-copies on each release for old download links.
+copies on each release for old download links. Since 0.5.0 the Mac app also carries Contents/MacOS/RoarTwin, a link to
+RoarKit (electron/adhoc-sign.js, before signing): the 0.1.x/0.2.x updater takes a new app only if it holds a program of
+that name, so without it those installs would download every update and never take it (test/updater.test.js).
 
 **Back and forward** (0.3.1): ← → at the start of the top row, Cmd+[ / Cmd+] (Alt+← / Alt+→ on Windows), a trackpad
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
+
+**0.5.0 (29 Oct): Uninstall apps, Startup items, the menu bar, Do by itself, Similar photos.**
+- **Uninstall apps** (Computer): every app with its version, size and the last time it was opened (Mac: /Applications,
+  ~/Applications and one folder deeper, Info.plist, du, mdls kMDItemLastUsedDate; Windows: the Uninstall keys of HKLM,
+  its WOW6432Node and HKCU, without system parts and updates). On a Mac, choosing an app finds what it left in ~/Library
+  (Application Support, Caches, Preferences, Containers, Group Containers, Saved Application State, Logs, HTTPStorages,
+  WebKit, LaunchAgents) by its bundle id, and by its name where a folder is named after it (never a name many share, never
+  what is another installed app's, as com.foo.bar.pro for com.foo.bar), each with its size and a check box; the app and
+  the chosen go to the Trash, a login agent stopped first. Refused: /System and Apple's own (com.apple.*), RoarKit itself,
+  an app that is open. On Windows the program's own uninstaller runs after a confirm (an MSI's /I becomes /X).
+  electron/tools/uninstall.js, test/uninstall.test.js on a made-up home folder.
+- **Startup items** (Computer): Mac login items (System Events; macOS asks once for Automation), ~/Library/LaunchAgents,
+  /Library/LaunchAgents and /Library/LaunchDaemons (label, program, at login, keeps running, loaded or running per
+  launchctl list). Windows: the Run keys (HKCU, HKLM, WOW6432Node) and the Startup folders. A switch turns one off and on
+  again, never a delete: a person's launch agent is stopped (launchctl bootout gui/<uid>) and its plist moved into
+  userData/Disabled startup items (back with launchctl bootstrap); a login item is remembered, then removed (and made
+  again from what was remembered); a Run value is saved there before it is taken out of the registry, and put back;
+  a Startup folder shortcut is moved aside. What is set for every user (/Library, HKLM, the common Startup folder) is
+  shown read only with a note. electron/tools/startup.js, test/startup.test.js.
+- **The menu bar** (electron/tray.js, Settings > Menu bar, on at first on a Mac, off on Windows where it is the
+  notification area and keeps RoarKit running when the window closes): a toolbox icon drawn at start (a template PNG
+  made by hand), the start-up disk's free space beside it; its menu shows that, the memory pressure and the heat level,
+  and opens RoarKit, the Overview or Clean up. A notification, once each time it begins: the start-up disk under 10%
+  free, a drive failing (SMART, every 15 minutes), the computer seriously hot. test/tray.test.js.
+- **Do by itself** (electron/jobs.js, Settings): each off at first. A weekly Clean up of the safe caches only (what Clean
+  up chooses at first, never the installers; a program that is open left alone; to the Trash), on a day and time. A
+  monthly check of the folders added against their copy reports (Check a backup > Against its copy report). They run
+  while the app or the menu bar icon runs, one missed runs once at the next start, the last runs are listed in Settings
+  (with Run now) and each sends a notification. userData/jobs.json; the schedule maths in test/jobs.test.js (Athens
+  time, across the change of the clocks).
+- **Similar photos** (Find twins): JPG, PNG, TIFF, HEIC (through the Mac's sips when ffmpeg cannot read it) and camera
+  RAW (through the JPEG preview inside it, the biggest viewable one; lossless sensor data left out). Two 64-bit
+  fingerprints from one 64x64 grey frame: a difference hash and a perceptual hash (DCT); near alike on both, or nearly
+  the same difference hash. The one kept: the most pixels, then the sharpest (Laplacian variance over a 1024-pixel grey
+  frame), then the newest; a clearly softer shot says Softer. The same safe Trash flow, one always kept, Masters kept.
+- The privacy link is themadlions.com/legal/roarkit/; the version a browser shows is app/demo.js VERSION, checked
+  against package.json by test/version.test.js.
 
 **0.4.0 (29 Oct): Overview, Settings, the new look.**
 - Overview, the first page: a score for the computer and what needs care first (start-up disk, failing or full drives,
@@ -70,7 +110,7 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   one folder twice (a card copied whole), and its files are not listed one by one again.
 - **A part of a longer video** (a choice, slower): every video one frame a second; a shorter one whose frames match a
   stretch of a longer one is a part of it, and where it starts is shown (a teaser cut out of the full clip).
-- **Similar photos:** each picture as a 9x8 fingerprint; the same photo saved again or resized, and burst shots that
+- **Similar photos:** (0.5.0, above) RAW and HEIC too, a difference and a perceptual hash, the sharpest kept; the same photo saved again or resized, and burst shots that
   are nearly alike, of the same shape.
 - **The same sound in another file:** a WAV and its MP3/M4A, compared by the sound itself (an audio fingerprint in the
   Haitsma-Kalker way: rising or falling energy across 33 bands, 40 seconds of it).
@@ -115,6 +155,7 @@ to choose. The list can be saved as CSV.
 ## Layout
 - `electron/engine.js`: the scan (plain Node). `test/engine.test.js` runs it on real videos made with ffmpeg.
 - `electron/clean.js`: Clean up's places, measured and checked (plain Node). `test/clean.test.js` runs it on a made-up home folder.
+- `electron/jobs.js`: Do by itself (the schedule, the runner, the log); `electron/tray.js`: the menu bar icon and its alerts.
 - `electron/main.js`, `preload.js`: the window, folders, Trash, Finder/Explorer. `updater.js`: updates from the releases.
 - `app/`: the page (no build step). Opened in a browser, `app/demo.js` stands in for the disk.
 

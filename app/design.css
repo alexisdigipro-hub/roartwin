@@ -49,6 +49,7 @@ html[data-theme="light"] .side-lens { background: rgba(255,255,255,.85); box-sha
 [data-tool="contact"] { --t: #ff6b2c; } [data-tool="rename"] { --t: #64d2ff; }
 [data-tool="files"] { --t: #1e90ff; } [data-tool="archive"] { --t: #a2845e; }
 [data-tool="drives"] { --t: #8e8e93; } [data-tool="speed"] { --t: #ffcc00; } [data-tool="stats"] { --t: #32d74b; } [data-tool="vault"] { --t: #636366; }
+[data-tool="startup"] { --t: #ff9500; } [data-tool="uninstall"] { --t: #5856d6; }
 [data-tool="settings"] { --t: #8e8e93; }
 
 /* ---------- the top row: see-through, the page passes under it ---------- */
