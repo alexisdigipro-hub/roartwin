@@ -6,7 +6,7 @@ const KIND = {
   project: ['Projects', '#64d2ff'], archive: ['Archives', '#ff9f0a'], other: ['Other', 'var(--dim)'],
 }
 const GB = 1e9
-const st = { root: null, res: null, busy: false, prog: null, node: null, trail: [], tab: 'folders', sel: new Map(), gone: new Set(), minGB: null, months: null, old: null }
+const st = { root: null, res: null, busy: false, prog: null, node: null, trail: [], tab: 'folders', sel: new Map(), gone: new Set(), minGB: null, months: null, old: null, places: null }
 let lastDraw = 0
 
 function init(ctx) {
@@ -15,6 +15,8 @@ function init(ctx) {
     st.minGB = ctx.load('space', 'minGB', 1)
     st.months = ctx.load('space', 'months', 6)
   }
+  // the quick starts: home folder, this computer's drive, the other drives (asked once a visit to the start page)
+  if (!st.places) { st.places = { home: '', disk: '', drives: [] }; ctx.call('space-places').then((r) => { st.places = r; if (!st.res && !st.busy) ctx.draw() }).catch(() => {}) }
 }
 const pickedSize = () => [...st.sel.values()].reduce((n, f) => n + f.size, 0)
 const dirOf = (p) => p.replace(/[\\/][^\\/]*$/, '')
@@ -69,6 +71,26 @@ async function exportCsv(ctx) {
   try { if (await ctx.call('space-export', { text: rows.map((r) => r.map(q).join(',')).join('\r\n'), name: `Space map ${t(TABS[st.tab])}.csv` })) ctx.toast(t('List saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 const TABS = { folders: 'Folders', big: 'Biggest files', old: 'Large and old', kinds: 'By kind' }
+
+/* Choose all / none of a list (Alex, 29 Oct): never what is in a Masters folder, never what already went */
+function chooser(ctx, list) {
+  const { h, t } = ctx
+  const can = list.filter((f) => !f.protected && !st.gone.has(f.path))
+  if (!can.length) return null
+  const all = can.every((f) => st.sel.has(f.path))
+  const small = { height: '28px', padding: '0 12px', fontSize: '12.5px' }
+  return h('button', { class: 'btn', style: small, onclick: () => { if (all) can.forEach((f) => st.sel.delete(f.path)); else can.forEach((f) => st.sel.set(f.path, f)); ctx.draw() } }, all ? t('Choose none') : t('Choose all'))
+}
+/* the local snapshots, in plain words, with the command that removes them (it is not run here) */
+async function aboutSnapshots(ctx, v) {
+  const { t } = ctx
+  const cmd = `sudo tmutil deletelocalsnapshots ${v.mount && v.mount !== '/' ? `"${v.mount}"` : '/'}`
+  const go = await ctx.sheet(t('{n} local snapshots', { n: v.snapshots.length }),
+    t('Time Machine and macOS keep these copies of the drive from the last hours and days, so a file can be brought back even without the backup drive. macOS frees their space by itself when the drive needs it. To remove them now, paste this in Terminal (it asks for your Mac password):') + '\n\n' + cmd,
+    [[t('Close'), false], [t('Copy the command'), true, true]])
+  if (!go) return
+  try { await navigator.clipboard.writeText(cmd); ctx.toast(t('Copied. Paste it in Terminal.')) } catch { ctx.toast(cmd) }
+}
 
 /* one file: chosen for the Trash or not, its size, kind, date, Show in Finder */
 function fileRow(ctx, f) {
@@ -126,7 +148,8 @@ function viewOld(ctx) {
     h('div', { class: 'opts' },
       opt(t('Bigger than'), t('Only files at least this big.'), seg([[0.1, '100 MB'], [1, '1 GB'], [5, '5 GB'], [20, '20 GB']], st.minGB, (v) => { st.minGB = v; st.old = null; ctx.draw() })),
       opt(t('Untouched for'), t('Not changed in that time.'), seg([[3, t('3 months')], [6, t('6 months')], [12, t('1 year')], [24, t('2 years')]], st.months, (v) => { st.months = v; st.old = null; ctx.draw() }))),
-    st.old && !st.old.loading ? h('div', { class: 'sum' }, h('span', { class: 'chip tint' }, h('i'), plural(st.old.count, 'file') + ' · ' + bytes(st.old.size))) : null,
+    st.old && !st.old.loading ? h('div', { class: 'sum' }, h('span', { class: 'chip tint' }, h('i'), plural(st.old.count, 'file') + ' · ' + bytes(st.old.size)),
+      st.old.count > st.old.list.length ? h('span', { class: 'chip' }, t('The biggest {n} shown', { n: ctx.num(st.old.list.length) })) : null, chooser(ctx, st.old.list)) : null,
     st.old?.list.length ? h('section', { class: 'group sp-list' }, ...st.old.list.map((f) => fileRow(ctx, f))) : st.old && !st.old.loading ? h('p', { class: 'note' }, t('Nothing that big and that old here.')) : null)
 }
 
@@ -138,10 +161,13 @@ function viewResult(ctx) {
     h('span', { class: 'chip tint' }, h('i'), t('{s} in {n}', { s: bytes(r.size), n: plural(r.files, 'file') })),
     v.total ? h('span', { class: 'chip', title: v.name || '' }, t('{f} free of {t} on the drive', { f: bytes(v.free || 0), t: bytes(v.total) })) : null,
     v.containerFree && v.free && v.containerFree > v.free * 1.02 ? h('span', { class: 'chip', title: t('Space the drive shares with its other volumes.') }, t('{n} free in the container', { n: bytes(v.containerFree) })) : null,
-    snaps ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: v.snapshots.join('\n') + '\n\n' + t('Time Machine and macOS keep these on the drive; macOS frees their space by itself when it is needed.') }, h('i'), t('{n} local snapshots', { n: snaps })) : null,
+    snaps ? h('button', { class: 'chip tint sp-chipbtn', style: { '--c': 'var(--warn)' }, title: v.snapshots.join('\n'), onclick: () => aboutSnapshots(ctx, v) }, h('i'), t('{n} local snapshots', { n: snaps })) : null,
+    // folders macOS would not let the app read: the total is short by them, and here is why
+    r.denied?.count ? h('button', { class: 'chip tint sp-chipbtn', style: { '--c': 'var(--warn)' }, title: r.denied.some.join('\n'), onclick: () => ctx.sheet(t('{n} could not be read', { n: plural(r.denied.count, 'folder') }),
+      t('The computer did not let the app look inside them, so the sizes here leave them out. On a Mac: System Settings > Privacy & Security > Full Disk Access, switch on RoarKit, and map again.'), [[t('Close'), true, true]]) }, h('i'), t('{n} could not be read', { n: plural(r.denied.count, 'folder') })) : null,
     r.skipped?.length ? h('span', { class: 'chip', title: r.skipped.join('\n') }, t('Cloud left out: {n}', { n: r.skipped.length })) : null,
     h('span', { class: 'chip' }, t('in {t}', { t: dur(r.took / 1000) })))
-  const body = st.tab === 'big' ? h('section', { class: 'group sp-list' }, ...r.big.map((f) => fileRow(ctx, f)))
+  const body = st.tab === 'big' ? h('div', { class: 'sp-stack' }, h('div', { class: 'sum' }, chooser(ctx, r.big)), h('section', { class: 'group sp-list' }, ...r.big.map((f) => fileRow(ctx, f))))
     : st.tab === 'old' ? viewOld(ctx) : st.tab === 'kinds' ? viewKinds(ctx) : viewFolders(ctx)
   return h('main', {}, h('div', { class: 'res sp' }, sum, body), footEl(ctx))
 }
@@ -162,6 +188,18 @@ function viewBusy(ctx) {
     p.dir ? h('div', { class: 'sp-now', title: p.dir }, '‎' + p.dir) : null,
     h('button', { class: 'btn', onclick: () => ctx.stop() }, ico('stop'), t('Stop')))))
 }
+/* the quick starts: home folder, the computer's own drive, each drive that is in */
+function quickEl(ctx) {
+  const { h, t, ico } = ctx
+  const p = st.places
+  if (!p?.home) return null
+  const pickIt = (path) => { st.root = path; ctx.save('space', 'root', path); ctx.draw() }
+  const chip = (label, path, icon) => h('button', { class: 'chip sp-quick' + (st.root === path ? ' tint' : ''), title: path, onclick: () => pickIt(path) }, ico(icon), label)
+  return h('div', { class: 'sp-quicks' },
+    chip(t('Home folder'), p.home, 'folder'),
+    chip(ctx.platform === 'win32' ? t('This computer') : t('This Mac'), p.disk, 'drive'),
+    ...p.drives.map((d) => chip(d.name, d.path, 'drive')))
+}
 function viewStart(ctx) {
   const { h, t, I, ico } = ctx
   const take = async (paths) => { const p = paths?.[0]; if (!p) return; if (!(await ctx.isFolder(p))) return ctx.toast(t('Choose a folder or a drive.')); st.root = p; ctx.save('space', 'root', p); ctx.draw() }
@@ -172,13 +210,14 @@ function viewStart(ctx) {
       h('b', {}, t('Drop a folder or a drive here')), h('small', {}, t('A drive, your home folder, a shoot. Nothing is changed until you choose.')),
       st.root ? h('span', { class: 'root', title: st.root }, ico('folder'), h('span', {}, st.root), h('button', { 'aria-label': t('Remove'), html: I.x, onclick: () => { st.root = ''; ctx.save('space', 'root', ''); ctx.draw() } })) : null,
       h('button', { class: 'btn', onclick: async () => take(await ctx.pick()) }, ico('plus'), st.root ? t('Choose another…') : t('Choose…'))), take),
+    quickEl(ctx),
     h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => scan(ctx) }, ico('pie'), t('Map it'))),
     h('p', { class: 'note' }, t('Files go to the Trash only when you choose them; nothing in a Masters folder ever does.')))))
 }
 
 export default {
   // back and forward (app.js): what makes this tool's screen
-  nav: { get: () => ({ res: st.res, node: st.node, trail: [...st.trail], tab: st.tab }), set: (s) => { st.res = s.res; st.node = s.node; st.trail = [...s.trail]; st.tab = s.tab } },
+  nav: { get: () => ({ res: st.res, node: st.node, trail: [...st.trail], tab: st.tab }), set: (s) => { if (s.res !== st.res) { st.old = null; st.sel.clear() } st.res = s.res; st.node = s.node; st.trail = [...s.trail]; st.tab = s.tab } },
   id: 'space',
   el: {
     'Where did the <b>space</b> go?': 'Πού πήγε ο <b>χώρος</b>;',
@@ -207,6 +246,13 @@ export default {
     'Files': 'Αρχεία',
     'Scan again: this folder is not in the last scan.': 'Ψάξε ξανά: αυτός ο φάκελος δεν είναι στο τελευταίο ψάξιμο.',
     'Only files of the last scan, and nothing in a Masters folder.': 'Μόνο αρχεία του τελευταίου ψαξίματος, και τίποτα από φάκελο Masters.',
+    'Choose all': 'Διάλεξε όλα', 'Choose none': 'Κανένα',
+    'Close': 'Κλείσιμο', 'Copy the command': 'Αντιγραφή εντολής', 'Copied. Paste it in Terminal.': 'Αντιγράφηκε. Κόλλησέ την στο Terminal.',
+    'Time Machine and macOS keep these copies of the drive from the last hours and days, so a file can be brought back even without the backup drive. macOS frees their space by itself when the drive needs it. To remove them now, paste this in Terminal (it asks for your Mac password):': 'Το Time Machine και το macOS κρατάνε αυτά τα αντίγραφα του δίσκου από τις τελευταίες ώρες και μέρες, για να γυρίσει πίσω ένα αρχείο ακόμα και χωρίς τον δίσκο του backup. Το macOS ελευθερώνει μόνο του τον χώρο τους όταν τον χρειαστεί ο δίσκος. Για να τα σβήσεις τώρα, κόλλησε αυτό στο Terminal (θα ζητήσει τον κωδικό του Mac):',
+    '{n} could not be read': '{n} δεν διαβάστηκαν',
+    'The computer did not let the app look inside them, so the sizes here leave them out. On a Mac: System Settings > Privacy & Security > Full Disk Access, switch on RoarKit, and map again.': 'Ο υπολογιστής δεν άφησε την εφαρμογή να κοιτάξει μέσα τους, οπότε τα μεγέθη εδώ δεν τους μετράνε. Σε Mac: Ρυθμίσεις συστήματος > Απόρρητο και ασφάλεια > Πλήρης πρόσβαση στον δίσκο, άνοιξε το RoarKit, και ξαναδές τον χάρτη.',
+    'Home folder': 'Φάκελος χρήστη', 'This Mac': 'Αυτός ο Mac', 'This computer': 'Αυτός ο υπολογιστής',
+    'The biggest {n} shown': 'Φαίνονται τα {n} μεγαλύτερα',
   },
   top(ctx) {
     const { h, t, seg, ico } = ctx
@@ -216,7 +262,7 @@ export default {
       seg(Object.entries(TABS).map(([k, l]) => [k, t(l)]), st.tab, (v) => { st.tab = v; ctx.draw() }),
       h('div', { class: 'spacer' }),
       h('button', { class: 'btn', onclick: () => exportCsv(ctx), title: t('Export the list (CSV)') }, ico('out'), h('span', { class: 'lbl' }, t('Export'))),
-      h('button', { class: 'btn', onclick: () => { st.res = null; st.sel.clear(); ctx.draw() } }, ico('search'), h('span', { class: 'lbl' }, t('New scan')))]
+      h('button', { class: 'btn', onclick: () => { st.res = null; st.old = null; st.sel.clear(); st.places = null; ctx.draw() } }, ico('search'), h('span', { class: 'lbl' }, t('New scan')))]
   },
   view(ctx) {
     init(ctx)
@@ -236,6 +282,7 @@ export default {
     },
     'space-trash': async ({ paths }) => ({ ok: paths, failed: [] }),
     'space-export': async () => '/Users/alex/Desktop/Space map.csv',
+    'space-places': async () => ({ home: '/Users/alex', disk: '/', drives: [{ name: 'RAID', path: '/Volumes/RAID' }, { name: 'SHOOT_01', path: '/Volumes/SHOOT_01' }] }),
   },
 }
 
@@ -255,7 +302,7 @@ const DEMO_FILES = [
 ]
 function demoScan(root) {
   return {
-    root, took: 41200, size: 3.42e12, files: 48231, skipped: ['/Users/alex/pCloud Drive'],
+    root, took: 41200, size: 3.42e12, files: 48231, skipped: ['/Users/alex/pCloud Drive'], denied: { count: 3, some: ['/Volumes/RAID/.Spotlight-V100', '/Volumes/RAID/Clients/Private', '/Volumes/RAID/Archive/Locked'] },
     node: demoNode(R),
     big: [...DEMO_FILES].sort((a, b) => b.size - a.size),
     kinds: { video: { size: 1.41e12, count: 6120 }, raw: { size: 1.12e12, count: 9811 }, photo: { size: 0.21e12, count: 24010 }, audio: { size: 0.18e12, count: 5120 }, project: { size: 0.31e12, count: 210 }, archive: { size: 0.12e12, count: 88 }, other: { size: 0.07e12, count: 2872 } },

@@ -100,6 +100,38 @@ At least one output file must be specified`
   r = await files.transfer({ paths: [at('B/Day 1')], to: at('B/Day 1'), move: true })
   assert.strictEqual(r.failed.length, 1, 'never a folder into itself')
 
+  // Stop in the middle of copying a folder: what was half made of it goes to the Trash, the original stays (audit, 29 Oct)
+  put('S/Shoot/a.mov', 'x'.repeat(300000)); put('S/Shoot/b.mov', 'y'.repeat(300000)); fs.mkdirSync(at('T'))
+  const binned = []
+  let seen = 0
+  await assert.rejects(files.transfer({ paths: [at('S/Shoot')], to: at('T') }, {
+    stop: () => seen > 400000, onProgress: (x) => { seen = x.done },
+    trash: async (p) => { binned.push(p); fs.rmSync(p, { recursive: true, force: true }) },
+  }), /Stopped/)
+  assert.deepStrictEqual(binned, [at('T/Shoot')], 'the half copied folder, whole')
+  assert.ok(!fs.existsSync(at('T/Shoot')) && fs.readdirSync(at('T')).length === 0, 'nothing half copied is left')
+  assert.ok(fs.existsSync(at('S/Shoot/b.mov')), 'the original stays')
+  // a part file left behind by a crash does not block the next copy
+  fs.writeFileSync(at('T/a.mov.roartwin-part'), 'old')
+  r = await files.transfer({ paths: [at('S/Shoot/a.mov')], to: at('T') }, { trash: async () => {} })
+  assert.deepStrictEqual(r.failed, [])
+  assert.strictEqual(fs.readFileSync(at('T/a.mov'), 'utf8').length, 300000)
+
+  // a rename that changes only the case: never onto a second file of that spelling (a case-sensitive disk holds both)
+  put('K/Clip.mov', 'one'); put('K/clip.mov', 'two')
+  const caseSensitive = fs.readdirSync(at('K')).length === 2
+  if (caseSensitive) {
+    await assert.rejects(files.renameSafe(at('K/Clip.mov'), at('K/clip.mov')), /taken/)
+    assert.strictEqual(fs.readFileSync(at('K/clip.mov'), 'utf8'), 'two', 'the other file untouched')
+  }
+  fs.rmSync(at('K/clip.mov'))
+  assert.strictEqual(await files.renameSafe(at('K/Clip.mov'), at('K/CLIP.mov')), at('K/CLIP.mov'))
+  assert.deepStrictEqual(fs.readdirSync(at('K')), ['CLIP.mov'])
+
+  // a big folder lists whole, in order of nothing in particular but every item there
+  for (let i = 0; i < 300; i++) fs.writeFileSync(at('S/' + String(i).padStart(3, '0') + '.txt'), '')
+  assert.strictEqual((await files.listDir(at('S'))).filter((x) => x.name.endsWith('.txt')).length, 300)
+
   // compare
   const c = await files.compare(at('A'), at('B'))
   assert.ok(c.onlyRight.some((x) => x.rel === 'notes 2.txt'))
@@ -123,6 +155,11 @@ At least one output file must be specified`
   await assert.rejects(doors['files-transfer']({ paths: [at('A/link')], to: at('B') }), /not in a folder opened here/)
   const tr = await doors['files-trash']({ paths: [at('B/notes 3.txt')] })
   assert.deepStrictEqual(tr.ok, [at('B/notes 3.txt')])
+  // dragged in from the Finder: those exact paths may be copied in, nothing beside them
+  await assert.rejects(doors['files-transfer']({ paths: [at('S/Shoot/a.mov')], to: at('B') }), /not in a folder opened here/)
+  assert.deepStrictEqual(await doors['files-dropped']({ paths: [at('S/Shoot/a.mov'), at('nothing-here')] }), [at('S/Shoot/a.mov')])
+  assert.strictEqual((await doors['files-transfer']({ paths: [at('S/Shoot/a.mov')], to: at('B') })).ok.length, 1)
+  await assert.rejects(doors['files-transfer']({ paths: [at('S/Shoot/b.mov')], to: at('B') }), /not in a folder opened here/)
 
   // a real clip read through ffmpeg
   let bin = process.env.FFMPEG

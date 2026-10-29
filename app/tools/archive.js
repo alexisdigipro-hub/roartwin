@@ -1,7 +1,10 @@
 // Archives (Alex, 28 Oct: "zip, rar and every kind of compression"). Open: look inside an archive, then take it all
 // out into a new folder next to it. Make: files and folders into a ZIP, 7z, tar.gz or tar.xz. The Mac/Windows side is
 // electron/tools/archive.js (the computer's own tar); in a browser the `demo` below stands in.
-const A = { mode: '', items: [], info: null, dest: '', busy: false, prog: null, done: null, format: '', level: '', junk: null, name: '', shown: 200 }
+const A = { mode: '', items: [], info: null, dest: '', busy: false, prog: null, done: null, format: '', level: '', junk: null, name: '', shown: 200,
+  // 29 Oct: the password an archive was opened with (kept only while it is on screen), its Test, several archives at once,
+  // a ZIP with a password, and what this computer's tar can make
+  pw: '', tested: null, queue: [], batch: null, lock: false, lockPw: '', formats: null }
 let progEl = null
 
 const KIND_LABEL = { 'tar.gz': 'TAR.GZ', 'tar.bz2': 'TAR.BZ2', 'tar.xz': 'TAR.XZ', 'tar.zst': 'TAR.ZST', zip: 'ZIP', rar: 'RAR', '7z': '7Z', tar: 'TAR', iso: 'ISO', cab: 'CAB', cpio: 'CPIO', xar: 'XAR / PKG', gz: 'GZ', bz2: 'BZ2', xz: 'XZ', zst: 'ZST' }
@@ -10,7 +13,9 @@ const base = (p) => String(p).split(/[\\/]/).filter(Boolean).pop() || p
 const unsafe = (n) => { const x = String(n).replace(/\\/g, '/'); return x.startsWith('/') || /^[a-z]:/i.test(x) || x.split('/').includes('..') }
 const dirOf = (p) => { const s = String(p); const i = Math.max(s.lastIndexOf('/'), s.lastIndexOf('\\')); return i > 0 ? s.slice(0, i) : s }
 
+const took = (ctx, ms) => (ms >= 1000 ? ctx.dur(ms / 1000) : ctx.t('under a second'))
 function init(ctx) {
+  if (A.formats == null) { A.formats = []; ctx.call('archive-info', {}).then((r) => { A.formats = r?.formats?.length ? r.formats : ['zip', '7z', 'tar.gz', 'tar.xz']; if (!A.formats.includes(A.format)) A.format = A.formats[0]; ctx.draw() }).catch(() => { A.formats = ['zip', '7z', 'tar.gz', 'tar.xz'] }) }
   if (A.mode) return
   A.mode = ctx.load('archive', 'mode', 'open')
   A.format = ctx.load('archive', 'format', 'zip')
@@ -40,7 +45,7 @@ function progress(ctx) {
 }
 
 /* the password, asked in the shared glass window */
-function askPassword(ctx, wrong) {
+function askPassword(ctx, wrong, name = '') {
   const { h, t } = ctx
   return new Promise((done) => {
     const input = h('input', { class: 'ar-input', type: 'password', autocomplete: 'off', placeholder: t('Password') })
@@ -48,6 +53,7 @@ function askPassword(ctx, wrong) {
     const veil = h('div', { class: 'veil', onclick: (e) => { if (e.target === veil) close(null) } },
       h('form', { class: 'sheet', role: 'dialog', 'aria-modal': 'true', onsubmit: (e) => { e.preventDefault(); close(input.value) } },
         h('h3', {}, wrong ? t('That password did not open it.') : t('This archive has a password.')),
+        name ? h('p', { class: 'ar-pw-name' }, name) : null,
         h('p', {}, t('Type it to open the archive. It is used only for this and kept nowhere.')),
         input,
         h('div', { class: 'row', style: { marginTop: '16px' } }, h('button', { type: 'button', class: 'btn', onclick: () => close(null) }, t('Cancel')), h('button', { type: 'submit', class: 'btn main' }, t('Open')))))
@@ -58,44 +64,106 @@ function askPassword(ctx, wrong) {
 }
 
 /* ---------- Open ---------- */
-async function openArchive(ctx, p) {
+async function openArchive(ctx, p, password = '') {
   if (!p) return
-  A.done = null; A.info = null; A.dest = ''; A.shown = 200
+  A.done = null; A.info = null; A.dest = ''; A.shown = 200; A.tested = null; A.batch = null
+  if (!password) A.pw = ''
   try {
-    const r = await job(ctx, 'archive-list', { path: p })
+    const r = await job(ctx, 'archive-list', { path: p, password })
     if (r?.stopped) return ctx.toast(ctx.t('Stopped.'))
+    // a RAR or 7z that locks its names too: the password first, then the list
+    if (r?.needPassword) { const pw = await askPassword(ctx, r.wrong); if (pw) return openArchive(ctx, p, pw); return ctx.draw() }
+    A.pw = password
     A.info = r
   } catch (e) { ctx.toast(ctx.err(e)) }
   ctx.draw()
 }
-async function extract(ctx, password = '') {
+// several archives dropped or chosen at once: they open one after the other (29 Oct)
+function openMany(ctx, paths) {
+  const list = [...new Set(paths)].filter(Boolean)
+  if (list.length <= 1) return openArchive(ctx, list[0])
+  A.queue = list; A.info = null; A.done = null; A.batch = null; ctx.draw()
+}
+async function extract(ctx, password = A.pw) {
   try {
     const r = await job(ctx, 'archive-extract', { path: A.info.path, dest: A.dest, password })
-    if (r?.stopped) { ctx.toast(ctx.t('Stopped. What was taken out so far stays in its folder.')); return ctx.draw() }
+    if (r?.stopped) { ctx.toast(ctx.t('Stopped. The half-opened folder was taken away.')); return ctx.draw() }
     if (r?.needPassword) {
       const pw = await askPassword(ctx, r.wrong)
-      if (pw) return extract(ctx, pw)
+      if (pw) { A.pw = pw; return extract(ctx, pw) }
       return ctx.draw()
     }
     A.done = { kind: 'open', ...r }
   } catch (e) { ctx.toast(ctx.err(e)) }
   ctx.draw()
 }
+// Test: every entry read through, nothing written (29 Oct)
+async function testIt(ctx, password = A.pw) {
+  try {
+    const r = await job(ctx, 'archive-test', { path: A.info.path, password })
+    if (r?.stopped) { ctx.toast(ctx.t('Stopped.')); return ctx.draw() }
+    if (r?.needPassword) { const pw = await askPassword(ctx, r.wrong); if (pw) { A.pw = pw; return testIt(ctx, pw) } return ctx.draw() }
+    A.tested = r
+  } catch (e) { ctx.toast(ctx.err(e)) }
+  ctx.draw()
+}
+async function openAll(ctx) {
+  const out = []
+  for (const p of A.queue) {
+    let pw = ''
+    for (;;) {
+      let r
+      try { r = await job(ctx, 'archive-extract', { path: p, dest: A.dest, password: pw }) } catch (e) { r = { error: ctx.err(e) } }
+      if (r?.stopped) { ctx.toast(ctx.t('Stopped. The half-opened folder was taken away.')); A.batch = { results: out }; return ctx.draw() }
+      if (r?.needPassword) {
+        const got = await askPassword(ctx, r.wrong, base(p))
+        if (got) { pw = got; continue }
+        out.push({ path: p, error: ctx.t('Left closed: no password.') }); break
+      }
+      out.push({ path: p, ...r }); break
+    }
+  }
+  A.batch = { results: out }; ctx.draw()
+}
 function viewOpen(ctx) {
   const { h, t, bytes, num, dateOf } = ctx
   const take = async (paths) => {
     const ok = await ctx.call('archive-add', { paths }).catch(() => [])
     if (!ok.length) return ctx.toast(t('Drop an archive, not a folder.'))
-    openArchive(ctx, ok[0])
+    openMany(ctx, ok)
+  }
+  if (A.batch) {
+    const rs = A.batch.results
+    const okN = rs.filter((r) => r.folder).length
+    return [h('section', { class: 'group verdict' + (okN === rs.length ? ' ok' : ' bad') },
+      h('div', { class: 'big-i', html: okN === rs.length ? ctx.I.done : ctx.I.warn }),
+      h('div', {}, h('h2', { html: t('{a} of {b} <b>opened</b>.', { a: num(okN), b: num(A.queue.length) }) }))),
+      h('section', { class: 'group' }, h('div', { class: 'files ar-list' }, ...rs.map((r) => h('div', { class: 'ar-entry ar-batch' + (r.folder ? '' : ' bad') },
+        ctx.ico(r.folder ? 'done' : 'warn', 'ar-e-i'),
+        h('span', { class: 'ar-e-name', title: r.folder || r.path }, '‎' + base(r.path) + '‎'),
+        h('span', { class: 'ar-e-size' }, r.folder ? (r.partial ? t('Partly opened') : ctx.plural(r.count, 'file')) : (r.error || '')),
+        r.folder ? h('button', { class: 'ib sm', title: ctx.revealLabel(), 'aria-label': ctx.revealLabel(), html: ctx.I.reveal, onclick: () => ctx.reveal(r.folder) }) : h('span'))))),
+      h('div', { class: 'go' }, h('button', { class: 'btn', onclick: () => { A.batch = null; A.queue = []; ctx.draw() } }, ctx.ico('back'), t('Open another')))]
+  }
+  if (A.queue.length > 1 && !A.info && !A.done) {
+    return [h('section', { class: 'group ar-head' },
+      h('div', { class: 'ar-head-row' }, h('div', { class: 'dz-i ar-ico', html: ctx.I.zip }),
+        h('div', { class: 'f-main' }, h('div', { class: 'f-name' }, t('{n} archives', { n: num(A.queue.length) })), h('div', { class: 'f-meta' }, ...A.queue.slice(0, 12).map((p) => h('span', { class: 'chip', title: p }, base(p))), A.queue.length > 12 ? h('span', { class: 'chip' }, '+' + num(A.queue.length - 12)) : null)),
+        h('button', { class: 'ib', title: t('Open another'), 'aria-label': t('Open another'), html: ctx.I.x, disabled: A.busy, onclick: () => { A.queue = []; ctx.draw() } })),
+      destRow(ctx, t('Next to each archive, each in a new folder'))),
+      A.busy ? progress(ctx) : h('div', { class: 'go' }, h('button', { class: 'btn main big', onclick: () => openAll(ctx) }, ctx.ico('out'), t('Open them all'))),
+      h('p', { class: 'note' }, t('One after the other, each into its own new folder. A password is asked for each archive that has one.'))]
   }
   if (A.done?.kind === 'open') {
     const r = A.done
-    return [h('section', { class: 'group verdict ok' },
-      h('div', { class: 'big-i', html: ctx.I.done }),
+    return [h('section', { class: 'group verdict' + (r.partial ? ' bad' : ' ok') },
+      h('div', { class: 'big-i', html: r.partial ? ctx.I.warn : ctx.I.done }),
       h('div', {},
-        h('h2', { html: t('Opened into a <b>new folder</b>.') }),
+        h('h2', { html: r.partial ? t('Only <b>partly</b> opened.') : t('Opened into a <b>new folder</b>.') }),
         h('div', { class: 'sum' },
           h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), ctx.plural(r.count, 'file')),
+          r.took != null ? h('span', { class: 'chip' }, t('in {t}', { t: took(ctx, r.took) })) : null,
+          r.partial ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' } }, h('i'), t(r.partial)) : null,
           r.skipped?.length ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: r.skipped.join('\n') }, h('i'), t('{n} left out: outside the folder', { n: num(r.skipped.length) })) : null),
         h('div', { class: 'paths' }, h('div', { class: 'dest' }, h('span', { title: r.folder }, r.folder),
           h('button', { class: 'btn', style: { height: '28px', padding: '0 10px', fontSize: '12px' }, onclick: () => ctx.reveal(r.folder) }, ctx.ico('reveal'), ctx.revealLabel()))))),
@@ -106,9 +174,9 @@ function viewOpen(ctx) {
       h('div', { class: 'dz-i', html: ctx.I.zip }),
       h('b', {}, t('Drop an archive here')),
       h('small', {}, t('ZIP, RAR, 7z, TAR, TAR.GZ, TAR.XZ, TAR.BZ2, GZ, ISO, CAB, CPIO, PKG and more.')),
-      h('button', { class: 'btn', disabled: A.busy, onclick: async () => { const ps = await ctx.call('archive-pick', { mode: 'open' }).catch((e) => { ctx.toast(ctx.err(e)); return [] }); if (ps[0]) openArchive(ctx, ps[0]) } }, ctx.ico('plus'), t('Choose an archive…'))), take),
+      h('button', { class: 'btn', disabled: A.busy, onclick: async () => { const ps = await ctx.call('archive-pick', { mode: 'open' }).catch((e) => { ctx.toast(ctx.err(e)); return [] }); if (ps.length) openMany(ctx, ps) } }, ctx.ico('plus'), t('Choose archives…'))), take),
     A.busy ? progress(ctx) : null,
-    h('p', { class: 'note' }, t('It opens into a new folder next to the archive. Nothing already there is written over.'))]
+    h('p', { class: 'note' }, t('It opens into a new folder next to the archive. Nothing already there is written over. Drop several to open them all.'))]
   }
   const i = A.info
   const list = i.entries.filter((e) => !e.dir)
@@ -124,14 +192,17 @@ function viewOpen(ctx) {
             h('span', { class: 'chip tint' }, h('i'), KIND_LABEL[i.kind] || i.kind.toUpperCase()),
             h('span', { class: 'chip' }, ctx.plural(i.files, 'file')),
             i.size ? h('span', { class: 'chip' }, t('{a} inside, {b} packed', { a: bytes(i.size), b: bytes(i.packed) })) : h('span', { class: 'chip' }, t('{b} packed', { b: bytes(i.packed) })),
+            i.size > i.packed ? h('span', { class: 'chip' }, t('{n}% smaller packed', { n: Math.round((1 - i.packed / i.size) * 100) })) : null,
+            i.locked ? h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), t('Opened with its password')) : null,
+            i.damaged ? h('span', { class: 'chip tint', style: { '--c': 'var(--acc)' } }, h('i'), t(i.damaged)) : null,
+            A.tested ? h('span', { class: 'chip tint', style: { '--c': A.tested.ok ? 'var(--ok)' : 'var(--acc)' } }, h('i'), A.tested.ok ? t('Tested: every file is whole') : t(A.tested.error || 'The archive is damaged or cut short: it was not downloaded or copied whole.')) : null,
             i.unsafe?.length ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: i.unsafe.join('\n') }, h('i'), t('{n} would land outside the folder: left out', { n: num(i.unsafe.length) })) : null,
             i.junk ? h('span', { class: 'chip' }, t('{n} Mac leftovers inside', { n: num(i.junk) })) : null)),
-        h('button', { class: 'ib', title: t('Open another'), 'aria-label': t('Open another'), html: ctx.I.x, disabled: A.busy, onclick: () => { A.info = null; ctx.draw() } })),
-      h('div', { class: 'ar-dest' },
-        h('span', {}, h('b', {}, t('Where it goes')), h('small', { title: A.dest || dirOf(i.path) }, '‎' + (A.dest ? A.dest : t('Next to the archive, in a new folder')) + '‎')),
-        A.dest ? h('button', { class: 'btn', disabled: A.busy, onclick: () => { A.dest = ''; ctx.draw() } }, t('Next to the archive')) : null,
-        h('button', { class: 'btn', disabled: A.busy, onclick: async () => { const d = await ctx.call('archive-dest', {}).catch(() => ''); if (d) { A.dest = d; ctx.draw() } } }, ctx.ico('folder'), t('Choose…')))),
-    A.busy ? progress(ctx) : h('div', { class: 'go' }, h('button', { class: 'btn main big', onclick: () => extract(ctx) }, ctx.ico('out'), t('Open into a folder'))),
+        h('button', { class: 'ib', title: t('Open another'), 'aria-label': t('Open another'), html: ctx.I.x, disabled: A.busy, onclick: () => { A.info = null; A.pw = ''; A.tested = null; ctx.draw() } })),
+      destRow(ctx, t('Next to the archive, in a new folder'))),
+    A.busy ? progress(ctx) : h('div', { class: 'go ar-go' },
+      h('button', { class: 'btn', title: t('Reads every file through, writes nothing, and says if the archive is whole.'), onclick: () => testIt(ctx) }, ctx.ico('shield'), t('Test')),
+      h('button', { class: 'btn main big', onclick: () => extract(ctx) }, ctx.ico('out'), t('Open into a folder'))),
     shown.length ? h('section', { class: 'group' }, h('div', { class: 'files ar-list' }, ...shown.map((e) => h('div', { class: 'ar-entry' + (unsafe(e.name) ? ' bad' : '') },
       ctx.ico('file', 'ar-e-i'),
       h('span', { class: 'ar-e-name', title: e.name }, '‎' + e.name + '‎'),
@@ -140,6 +211,15 @@ function viewOpen(ctx) {
     list.length > shown.length ? h('button', { class: 'btn more', onclick: () => { A.shown += 400; ctx.draw() } }, t('Show {n} more', { n: num(Math.min(400, list.length - shown.length)) })) : null,
     i.count > i.entries.length ? h('p', { class: 'note' }, t('The first {a} of {b} are listed; every one is taken out.', { a: num(i.entries.length), b: num(i.count) })) : null,
   ]
+}
+
+// where it goes: next to the archive (or archives), or a folder chosen
+function destRow(ctx, here) {
+  const { h, t } = ctx
+  return h('div', { class: 'ar-dest' },
+    h('span', {}, h('b', {}, t('Where it goes')), h('small', { title: A.dest || '' }, '‎' + (A.dest ? A.dest : here) + '‎')),
+    A.dest ? h('button', { class: 'btn', disabled: A.busy, onclick: () => { A.dest = ''; ctx.draw() } }, t('Next to the archive')) : null,
+    h('button', { class: 'btn', disabled: A.busy, onclick: async () => { const d = await ctx.call('archive-dest', {}).catch(() => ''); if (d) { A.dest = d; ctx.draw() } } }, ctx.ico('folder'), t('Choose…')))
 }
 
 /* ---------- Make ---------- */
@@ -157,7 +237,9 @@ async function addItems(ctx, paths) {
 }
 async function makeNow(ctx) {
   try {
-    const r = await job(ctx, 'archive-make', { items: A.items, format: A.format, level: A.level, junk: A.junk, name: A.name.trim(), dest: A.dest })
+    const password = A.format === 'zip' && A.lock ? A.lockPw : ''
+    if (A.format === 'zip' && A.lock && password.length < 4) { ctx.toast(ctx.t('A password of four characters at least.')); return }
+    const r = await job(ctx, 'archive-make', { items: A.items, format: A.format, level: A.level, junk: A.junk, name: A.name.trim(), dest: A.dest, password })
     if (r?.stopped) { ctx.toast(ctx.t('Stopped. Nothing was left half made.')); return ctx.draw() }
     A.done = { kind: 'make', ...r }
   } catch (e) { ctx.toast(ctx.err(e)) }
@@ -176,10 +258,12 @@ function viewMake(ctx) {
         h('div', { class: 'sum' },
           h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), bytes(r.size)),
           h('span', { class: 'chip' }, ctx.plural(r.files, 'file')),
-          r.original ? h('span', { class: 'chip' }, t('{n}% smaller', { n: saved })) : null),
+          r.original ? h('span', { class: 'chip' }, t('{n}% smaller', { n: saved })) : null,
+          r.took != null ? h('span', { class: 'chip' }, t('in {t}', { t: took(ctx, r.took) })) : null,
+          r.locked ? h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' } }, h('i'), t('Locked with a password (AES-256)')) : null),
         h('div', { class: 'paths' }, h('div', { class: 'dest' }, h('span', { title: r.path }, r.path),
           h('button', { class: 'btn', style: { height: '28px', padding: '0 10px', fontSize: '12px' }, onclick: () => ctx.reveal(r.path) }, ctx.ico('reveal'), ctx.revealLabel()))))),
-    h('div', { class: 'go' }, h('button', { class: 'btn', onclick: () => { A.done = null; A.items = []; A.name = ''; ctx.draw() } }, ctx.ico('plus'), t('Make another')))]
+    h('div', { class: 'go' }, h('button', { class: 'btn', onclick: () => { A.done = null; A.items = []; A.name = ''; A.lockPw = ''; ctx.draw() } }, ctx.ico('plus'), t('Make another')))]
   }
   const pickFiles = async () => addItems(ctx, await ctx.call('archive-pick', { mode: 'make' }).catch((e) => { ctx.toast(ctx.err(e)); return [] }))
   const pickFolders = async () => addItems(ctx, await ctx.call('archive-pick-folders', {}).catch(() => []))
@@ -195,7 +279,13 @@ function viewMake(ctx) {
       A.items.length ? h('div', { class: 'roots' }, ...A.items.map((p) => h('span', { class: 'root', title: p }, ctx.ico('file'), h('span', {}, base(p)),
         h('button', { 'aria-label': t('Remove'), html: ctx.I.x, disabled: A.busy, onclick: () => { A.items = A.items.filter((x) => x !== p); ctx.draw() } })))) : null), (ps) => addItems(ctx, ps)),
     h('div', { class: 'opts' },
-      opt(t('Kind'), t(FORMAT_NOTE[A.format] || ''), ctx.seg(FORMATS, A.format, (v) => { A.format = v; ctx.save('archive', 'format', v); ctx.draw() })),
+      opt(t('Kind'), t(FORMAT_NOTE[A.format] || '') + (A.formats?.length && A.formats.length < FORMATS.length ? ' ' + t('This computer makes: {k}.', { k: FORMATS.filter(([f]) => A.formats.includes(f)).map((f) => f[1]).join(', ') }) : ''),
+        ctx.seg(A.formats?.length ? FORMATS.filter(([f]) => A.formats.includes(f)) : FORMATS, A.format, (v) => { A.format = v; ctx.save('archive', 'format', v); ctx.draw() })),
+      // a ZIP locked with a password (29 Oct): AES-256, opened by a Mac, Windows 11 and 7-Zip
+      A.format === 'zip' ? opt(t('Lock with a password'), t('AES-256. Send the password apart from the file. The names inside stay readable.'),
+        h('span', { class: 'row-btns' },
+          A.lock ? h('input', { class: 'ar-input', type: 'password', autocomplete: 'new-password', placeholder: t('Password'), value: A.lockPw, oninput: (e) => { A.lockPw = e.target.value } }) : null,
+          ctx.switchEl(A.lock, (v) => { A.lock = v; if (!v) A.lockPw = ''; ctx.draw() }, t('Lock with a password')))) : null,
       opt(t('Squeeze'), t('Fast makes it sooner, Smallest makes it smaller. Videos and photos hardly shrink: they are packed already.'),
         ctx.seg([['fast', t('Fast')], ['normal', t('Normal')], ['small', t('Smallest')]], A.level, (v) => { A.level = v; ctx.save('archive', 'level', v); ctx.draw() })),
       opt(t('Leave out Mac leftovers'), t('.DS_Store, __MACOSX and ._ files, which mean nothing on another computer.'),
@@ -274,6 +364,36 @@ export default {
     'A disk image, not an archive: open it with a double click.': 'Εικόνα δίσκου, όχι αρχείο συμπίεσης: άνοιξέ τη με διπλό κλικ.',
     'This archive is locked with a password.': 'Αυτό το αρχείο είναι κλειδωμένο με κωδικό.',
     'Choose or drop it here first.': 'Διάλεξέ το ή ρίξ\' το εδώ πρώτα.', 'Choose files or folders first.': 'Διάλεξε πρώτα αρχεία ή φακέλους.',
+    'under a second': 'λιγότερο από ένα δευτερόλεπτο', 'in {t}': 'σε {t}',
+    'Left closed: no password.': 'Έμεινε κλειστό: χωρίς κωδικό.',
+    '{a} of {b} <b>opened</b>.': '{a} από {b} <b>άνοιξαν</b>.', 'Partly opened': 'Άνοιξε μισό',
+    '{n} archives': '{n} αρχεία συμπίεσης', 'Next to each archive, each in a new folder': 'Δίπλα στο καθένα, το καθένα σε νέο φάκελο',
+    'Open them all': 'Άνοιξέ τα όλα',
+    'One after the other, each into its own new folder. A password is asked for each archive that has one.': 'Το ένα μετά το άλλο, το καθένα στον δικό του νέο φάκελο. Για όσα έχουν κωδικό, τον ζητάει για το καθένα.',
+    'Only <b>partly</b> opened.': 'Άνοιξε μόνο <b>μισό</b>.',
+    'Choose archives…': 'Διάλεξε αρχεία…',
+    'It opens into a new folder next to the archive. Nothing already there is written over. Drop several to open them all.': 'Ανοίγει σε έναν νέο φάκελο δίπλα στο αρχείο. Τίποτα από όσα υπάρχουν ήδη δεν γράφεται από πάνω. Ρίξε πολλά για να ανοίξουν όλα μαζί.',
+    '{n}% smaller packed': '{n}% μικρότερο συμπιεσμένο', 'Opened with its password': 'Άνοιξε με τον κωδικό του',
+    'Tested: every file is whole': 'Ελέγχθηκε: κάθε αρχείο είναι ακέραιο',
+    'The archive is damaged or cut short: it was not downloaded or copied whole.': 'Το αρχείο είναι χαλασμένο ή κομμένο: δεν κατέβηκε ή δεν αντιγράφηκε ολόκληρο.',
+    'Reads every file through, writes nothing, and says if the archive is whole.': 'Διαβάζει κάθε αρχείο μέχρι το τέλος, δεν γράφει τίποτα, και λέει αν το αρχείο είναι ακέραιο.',
+    'Test': 'Έλεγχος',
+    'Stopped. The half-opened folder was taken away.': 'Σταμάτησε. Ο μισάνοιχτος φάκελος αφαιρέθηκε.',
+    'A password of four characters at least.': 'Κωδικός τουλάχιστον τεσσάρων χαρακτήρων.',
+    'Locked with a password (AES-256)': 'Κλειδωμένο με κωδικό (AES-256)',
+    'This computer makes: {k}.': 'Αυτός ο υπολογιστής φτιάχνει: {k}.',
+    'Lock with a password': 'Κλείδωμα με κωδικό',
+    'AES-256. Send the password apart from the file. The names inside stay readable.': 'AES-256. Στείλε τον κωδικό χωριστά από το αρχείο. Τα ονόματα μέσα φαίνονται.',
+    'The drive is full. Free some space, or choose another place for it.': 'Ο δίσκος γέμισε. Άδειασε λίγο χώρο, ή διάλεξε άλλο σημείο.',
+    'This app may not write there. Choose another place.': 'Η εφαρμογή δεν μπορεί να γράψει εκεί. Διάλεξε άλλο σημείο.',
+    'This computer cannot make that kind. Choose ZIP or TAR.GZ.': 'Αυτός ο υπολογιστής δεν φτιάχνει αυτό το είδος. Διάλεξε ZIP ή TAR.GZ.',
+    'Only a ZIP can have a password.': 'Κωδικό μπορεί να έχει μόνο ένα ZIP.',
+    "This computer's tar cannot lock a ZIP with a password.": 'Το tar αυτού του υπολογιστή δεν μπορεί να κλειδώσει ZIP με κωδικό.',
+    'This archive has entries that would land outside the folder, and too many entries to leave them out one by one.': 'Αυτό το αρχείο έχει περιεχόμενα που θα έβγαιναν έξω από τον φάκελο, και είναι πάρα πολλά για να παραλειφθούν ένα ένα.',
+    'This computer has no tar to open archives with.': 'Αυτός ο υπολογιστής δεν έχει tar για να ανοίξει αρχεία συμπίεσης.',
+    'This computer has no tar to make archives with.': 'Αυτός ο υπολογιστής δεν έχει tar για να φτιάξει αρχεία συμπίεσης.',
+    "This computer's tar opens only tar archives.": 'Το tar αυτού του υπολογιστή ανοίγει μόνο αρχεία tar.',
+    'Unknown kind of archive.': 'Άγνωστο είδος αρχείου.',
     'The archive could not be read.': 'Το αρχείο δεν διαβάστηκε.', 'The archive could not be opened.': 'Το αρχείο δεν άνοιξε.', 'The archive could not be made.': 'Το αρχείο δεν φτιάχτηκε.',
   },
   demo: {
@@ -281,6 +401,11 @@ export default {
     'archive-pick-folders': async () => ['/Users/alex/Projects/Spring campaign/Stills'],
     'archive-add': async ({ paths }) => paths || [],
     'archive-dest': async () => '/Volumes/BACKUP/Deliveries',
+    'archive-info': async () => ({ tar: true, flavour: 'bsd', formats: ['zip', '7z', 'tar.gz', 'tar.xz'], platform: 'darwin' }),
+    'archive-test': async (_a, emit) => {
+      for (let i = 0; i <= 8; i++) { emit('archive-progress', { done: i, total: 8 }); await new Promise((r) => setTimeout(r, 90)) }
+      return { ok: true, count: 8, took: 2400 }
+    },
     'archive-list': async ({ path }) => {
       const at = (d) => new Date(2026, 9, d, 18, 20).getTime()
       const entries = [
@@ -297,11 +422,11 @@ export default {
     },
     'archive-extract': async (_a, emit) => {
       for (let i = 0; i <= 8; i++) { emit('archive-progress', { done: i, total: 8 }); await new Promise((r) => setTimeout(r, 120)) }
-      return { folder: '/Users/alex/Downloads/Ilie mou - Final deliverables', count: 8, skipped: [] }
+      return { folder: '/Users/alex/Downloads/Ilie mou - Final deliverables', count: 8, skipped: [], took: 41000 }
     },
     'archive-make': async ({ items }, emit) => {
       for (let i = 0; i <= 10; i++) { emit('archive-progress', { done: i * 4, total: 40 }); await new Promise((r) => setTimeout(r, 100)) }
-      return { path: '/Users/alex/Projects/Spring campaign/Exports.zip', size: 1.92e9, files: 40, original: 2.31e9, items }
+      return { path: '/Users/alex/Projects/Spring campaign/Exports.zip', size: 1.92e9, files: 40, original: 2.31e9, items, took: 63000 }
     },
   },
 }

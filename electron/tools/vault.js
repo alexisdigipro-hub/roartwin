@@ -159,7 +159,8 @@ function parseTotp(input) {
     algo = String(u.searchParams.get('algorithm') || 'SHA1').toLowerCase()
   }
   const key = base32(secret)
-  if (!key || ![6, 7, 8].includes(digits) || !(period >= 10 && period <= 120) || !['sha1', 'sha256', 'sha512'].includes(algo)) return null
+  // at least 80 bits, as every site gives (a word typed by mistake is not a key)
+  if (!key || key.length < 10 || ![6, 7, 8].includes(digits) || !(period >= 10 && period <= 120) || !['sha1', 'sha256', 'sha512'].includes(algo)) return null
   return { key, digits, period, algo }
 }
 /* the code at a moment: HMAC of the time step, dynamic truncation */

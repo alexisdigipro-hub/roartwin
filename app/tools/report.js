@@ -10,6 +10,7 @@ export const EL_SHARED = {
   '{a} of {b} clips': '{a} από {b} clips', 'Back': 'Πίσω', 'Saved': 'Αποθηκεύτηκε',
   'Choose a folder or a drive.': 'Διάλεξε φάκελο ή δίσκο.', 'Stopped.': 'Σταμάτησε.',
   'No clips in this folder.': 'Δεν υπάρχουν clips σε αυτόν τον φάκελο.', 'clips': 'clips',
+  'Show {n} more': 'Δείξε {n} ακόμα', 'Photos too': 'Και φωτογραφίες', 'Pictures from cameras and phones as well: their size and a frame.': 'Και τις φωτογραφίες από κάμερες και κινητά: το μέγεθός τους και μια εικόνα.',
 }
 // the folder (or card) to look in, dropped or chosen
 export function folderBox(ctx, st, key, onSet) {
@@ -56,7 +57,14 @@ export async function runJob(ctx, st, door, args, event) {
   } catch (e) { ctx.toast(ctx.err(e)); return null } finally { off?.(); st.busy = false; ctx.busy(false) }
 }
 export const csvOf = (rows) => rows.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n')
-export const codecOf = (c) => (c.video ? c.video.name : (c.audio?.[0]?.codec || '').replace(/^pcm_.*/, 'PCM').toUpperCase())
+export const codecOf = (c) => (c.video ? c.video.name : c.unread ? c.unread : (c.audio?.[0]?.codec || '').replace(/^pcm_.*/, 'PCM').toUpperCase())
+// the locale of the dates on a PDF, from the app's language
+export const localeOf = (ctx) => (ctx.S.lang === 'el' ? 'el-GR' : 'en-GB')
+// a long list is drawn a page at a time (a card of 2,000 clips stays quick)
+export const PAGE = 120
+export function moreEl(ctx, st, left) {
+  return left > 0 ? ctx.h('button', { class: 'btn more', onclick: () => { st.shown += PAGE; ctx.draw() } }, ctx.t('Show {n} more', { n: ctx.num(Math.min(PAGE, left)) })) : null
+}
 export const soundOf = (c) => (c.audio || []).map((a) => `${a.channels || a.layout} ch · ${Math.round(a.rate / 100) / 10} kHz${a.bits ? ' · ' + a.bits + ' bit' : ''}`).join(', ')
 // a sample picture for the browser preview
 export const pic = (a, b, c) => 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 90"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${a}"/><stop offset="1" stop-color="${b}"/></linearGradient><radialGradient id="l" cx=".7" cy=".3" r=".5"><stop offset="0" stop-color="${c}" stop-opacity=".9"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></radialGradient></defs><rect width="160" height="90" fill="url(#g)"/><circle cx="112" cy="28" r="40" fill="url(#l)"/><path d="M0 66h160v24H0z" fill="#000" opacity=".45"/></svg>`)
@@ -73,29 +81,47 @@ export const SAMPLE_CLIPS = [
   path: `/Volumes/CARD_A/CLIP/${name}`, name, dir: '/Volumes/CARD_A/CLIP', size, date: `2026-10-${14 + (i > 2 ? 1 : 0)}`, dur, tc,
   video: { codec: '', profile: '', fps: v.fps, ...v }, audio: name.startsWith('DRONE') ? [] : [{ codec: 'pcm_s24le', rate: 48000, channels: 2, bits: 24 }], thumb: pic(...c), frames: [pic(...c)],
 })).concat([{ path: '/Volumes/CARD_A/SOUND/T014.wav', name: 'T014.wav', dir: '/Volumes/CARD_A/SOUND', size: 0.31e9, date: '2026-10-14', dur: 212.6, tc: '14:02:10:00', video: null, audio: [{ codec: 'pcm_s24le', rate: 48000, channels: 2, bits: 24 }], thumb: '', frames: [] }])
+// a BRAW clip ffmpeg cannot read, as the real side reports it
+SAMPLE_CLIPS.splice(5, 0, { path: '/Volumes/CARD_A/CLIP/C003_A001_1029.braw', name: 'C003_A001_1029.braw', dir: '/Volumes/CARD_A/CLIP', size: 7.8e9, mtime: 0, date: '2026-10-15', dur: null, tc: '', video: null, audio: [], thumb: '', frames: [], kind: 'video', unread: 'Blackmagic RAW', unreadApp: 'Blackmagic RAW Player or DaVinci Resolve' })
+for (const c of SAMPLE_CLIPS) { c.mtime = c.mtime || Date.parse(c.date); c.kind = c.kind || (c.video ? 'video' : 'audio') }
+SAMPLE_CLIPS[0].tcOut = '14:07:23:16'; SAMPLE_CLIPS[1].tcOut = '14:11:16:16'
 export async function demoRun(event, n, emit) { for (let i = 0; i <= n; i++) { emit(event, { done: i, total: n }); await wait(110) } }
 
 /* ---------- Media report ---------- */
-const st = { root: '', res: null, busy: false, p: null }
+const st = { root: '', res: null, busy: false, p: null, photos: false, sort: 'name', q: '', group: false, shown: PAGE }
 let loaded = false
-const load = (ctx) => { if (!loaded) { loaded = true; st.root = ctx.load('report', 'root', '') } }
+const load = (ctx) => { if (!loaded) { loaded = true; st.root = ctx.load('report', 'root', ''); st.photos = ctx.load('report', 'photos', false); st.sort = ctx.load('report', 'sort', 'name'); st.group = ctx.load('report', 'group', false) } }
+const setOpt = (ctx, k, v) => { st[k] = v; ctx.save('report', k, v); st.shown = PAGE; ctx.draw() }
+/* the clips as asked: searched (name, folder, codec, timecode, camera), sorted */
+const SORTS = { name: (a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }), length: (a, b) => (b.dur || 0) - (a.dur || 0), size: (a, b) => (b.size || 0) - (a.size || 0), date: (a, b) => (b.mtime || 0) - (a.mtime || 0), tc: (a, b) => String(a.tc || '~').localeCompare(String(b.tc || '~')) }
+export function shownClips(clips, { q = '', sort = 'name' } = {}) {
+  const words = String(q).toLowerCase().split(/\s+/).filter(Boolean)
+  const hay = (c) => [c.name, c.dir, codecOf(c), c.tc, c.meta?.make, c.meta?.model, c.video ? `${c.video.w}x${c.video.h}` : ''].join(' ').toLowerCase()
+  return clips.filter((c) => words.every((w) => hay(c).includes(w))).sort(SORTS[sort] || SORTS.name)
+}
+// every codec with how many clips and how long they run
+export function codecTotals(clips) {
+  const m = new Map()
+  for (const c of clips) { const k = codecOf(c); if (!k) continue; const x = m.get(k) || { name: k, n: 0, dur: 0 }; x.n++; x.dur += c.dur || 0; m.set(k, x) }
+  return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name))
+}
 
-const words = (t) => ({ title: t('Media report'), clips: t('clips'), name: t('Name'), length: t('Length'), tc: t('Timecode'), codec: t('Codec'), picture: t('Picture'), sound: t('Sound'), size: t('Size'), date: t('Date') })
+const words = (t) => ({ title: t('Media report'), clips: t('clips'), name: t('Name'), length: t('Length'), tc: t('TC in'), tcOut: t('TC out'), codec: t('Codec'), picture: t('Picture'), sound: t('Sound'), size: t('Size'), date: t('Date') })
 async function start(ctx) {
   if (!st.root) return
-  const r = await runJob(ctx, st, 'report-scan', { root: st.root, skipHidden: ctx.S.opts.skipHidden }, 'report-progress')
-  if (r) { st.res = r; if (!r.clips.length) ctx.toast(ctx.t('No clips in this folder.')) }
+  const r = await runJob(ctx, st, 'report-scan', { root: st.root, skipHidden: ctx.S.opts.skipHidden, photos: st.photos }, 'report-progress')
+  if (r) { st.res = r; st.q = ''; st.shown = PAGE; if (!r.clips.length) ctx.toast(ctx.t('No clips in this folder.')) }
   ctx.draw()
 }
 async function exportCSV(ctx) {
   const { t, dur } = ctx
-  const rows = [[t('Name'), t('Folder'), t('Length'), t('Timecode'), t('Codec'), t('Picture'), 'fps', t('Colour'), t('Sound'), t('Size (bytes)'), t('Date'), t('Camera')]]
-  for (const c of st.res.clips) rows.push([c.name, c.dir, c.dur != null ? dur(c.dur) : '', c.tc, codecOf(c), c.video ? `${c.video.w}x${c.video.h}` : '', c.video?.fps ?? '', [c.video?.pix, c.video?.color, c.video?.hdr].filter(Boolean).join(' '), soundOf(c), c.size, c.date, [c.meta?.make, c.meta?.model].filter(Boolean).join(' ')])
+  const rows = [[t('Name'), t('Folder'), t('Length'), t('TC in'), t('TC out'), t('Codec'), t('Picture'), 'fps', t('Colour'), t('Sound'), t('Size (bytes)'), t('Date'), t('Camera')]]
+  for (const c of shownClips(st.res.clips, st)) rows.push([c.name, c.dir, c.dur != null ? dur(c.dur) : '', c.tc, c.tcOut || '', codecOf(c), c.video ? `${c.video.w}x${c.video.h}` : '', c.video?.fps ?? '', [c.video?.pix, c.video?.color, c.video?.hdr].filter(Boolean).join(' '), soundOf(c), c.size, c.date, [c.meta?.make, c.meta?.model].filter(Boolean).join(' ')])
   const name = `Media report ${st.res.root.split(/[\\/]/).filter(Boolean).pop() || ''}.csv`
   try { if (await ctx.call('media-save-csv', { text: csvOf(rows), name })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 async function savePDF(ctx) {
-  try { if (await ctx.call('report-pdf', { words: words(ctx.t) })) ctx.toast(ctx.t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
+  try { if (await ctx.call('report-pdf', { id: st.res?.id, words: words(ctx.t), locale: localeOf(ctx) })) ctx.toast(ctx.t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 
 function clipEl(ctx, c) {
@@ -103,19 +129,20 @@ function clipEl(ctx, c) {
   const v = c.video
   const chip = (x) => (x ? h('span', { class: 'chip' }, x) : null)
   return h('div', { class: 'file nocheck' },
-    h('div', { class: 'thumb', style: c.thumb ? { backgroundImage: `url("${c.thumb}")` } : null }, c.thumb ? null : ico(v ? 'play' : 'sound')),
+    h('div', { class: 'thumb', style: c.thumb ? { backgroundImage: `url("${c.thumb}")` } : null }, c.thumb ? null : ico(c.kind === 'photo' ? 'file' : v || c.unread ? 'play' : 'sound')),
     h('div', { class: 'f-main' }, h('div', { class: 'f-name', title: c.name }, c.name), h('div', { class: 'f-dir', title: c.dir }, '‎' + c.dir),
       h('div', { class: 'f-meta' },
         c.dur != null ? chip(dur(c.dur)) : null,
-        c.tc ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' } }, h('i'), 'TC ' + c.tc) : null,
-        chip(codecOf(c)),
-        v ? chip(`${v.w}×${v.h}` + (v.fps ? ` · ${Math.round(v.fps * 1000) / 1000} fps` : '')) : null,
+        c.tc ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' } }, h('i'), 'TC ' + c.tc + (c.tcOut ? ' → ' + c.tcOut : '')) : null,
+        c.unread ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: t('Open it in {a}.', { a: c.unreadApp }) }, h('i'), t('{f}: not read here', { f: c.unread })) : chip(codecOf(c)),
+        v ? chip(`${v.w}×${v.h}` + (v.fps && c.kind !== 'photo' ? ` · ${Math.round(v.fps * 1000) / 1000} fps` : '')) : null,
+        c.meta?.make || c.meta?.model ? chip([c.meta.make, c.meta.model].filter(Boolean).join(' ')) : null,
         v?.hdr ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' } }, h('i'), v.hdr) : null,
         c.audio?.length ? chip(soundOf(c)) : null,
         chip(bytes(c.size)), chip(c.date))),
     h('div', { class: 'f-act' },
       h('button', { class: 'ib sm', title: ctx.revealLabel(), 'aria-label': ctx.revealLabel(), html: I.reveal, onclick: () => ctx.reveal(c.path) }),
-      h('button', { class: 'ib sm', title: t('Open'), 'aria-label': t('Open'), html: v ? I.play : I.sound, onclick: () => ctx.open(c.path) })))
+      h('button', { class: 'ib sm', title: t('Open'), 'aria-label': t('Open'), html: c.kind === 'photo' ? I.file : v || c.unread ? I.play : I.sound, onclick: () => ctx.open(c.path) })))
 }
 
 export default {
@@ -131,6 +158,9 @@ export default {
     '{n} clips': '{n} clips', '1 clip': '1 clip', 'in all': 'συνολικά',
     'Name': 'Όνομα', 'Folder': 'Φάκελος', 'Length': 'Διάρκεια', 'Timecode': 'Timecode', 'Codec': 'Codec', 'Picture': 'Εικόνα',
     'Sound': 'Ήχος', 'Size': 'Μέγεθος', 'Size (bytes)': 'Μέγεθος (bytes)', 'Date': 'Ημερομηνία', 'Colour': 'Χρώμα', 'Camera': 'Κάμερα', 'Open': 'Άνοιγμα',
+    'TC in': 'TC in', 'TC out': 'TC out', 'Open it in {a}.': 'Άνοιξέ το στο {a}.', '{f}: not read here': '{f}: δεν διαβάζεται εδώ',
+    'Search the clips': 'Αναζήτηση στα clips', 'By name': 'Όνομα', 'Longest': 'Διάρκεια', 'Biggest': 'Μέγεθος', 'Newest': 'Νεότερα', 'By timecode': 'Timecode',
+    'By folder': 'Ανά φάκελο', '{a} of {b} clips shown': '{a} από {b} clips', 'Nothing matches.': 'Δεν βρέθηκε τίποτα.',
   },
   top(ctx) {
     const { h, t, ico } = ctx
@@ -147,27 +177,47 @@ export default {
     load(ctx)
     if (st.busy) return progressEl(ctx, st, t('Reading the clips'))
     if (st.res) {
-      const cl = st.res.clips
+      const all = st.res.clips
+      const cl = shownClips(all, st)
       const total = cl.reduce((n, c) => n + (c.dur || 0), 0), size = cl.reduce((n, c) => n + (c.size || 0), 0)
-      const codecs = [...new Set(cl.map(codecOf).filter(Boolean))]
+      const tools = all.length ? h('div', { class: 'rp-tools' },
+        h('label', { class: 'rp-q' }, ico('search'), h('input', { type: 'search', value: st.q, placeholder: t('Search the clips'), 'aria-label': t('Search the clips'),
+          oninput: (e) => { st.q = e.target.value; st.shown = PAGE; const pos = e.target.selectionStart; ctx.draw(); const q = document.querySelector('.rp-q input'); if (q) { q.focus(); q.setSelectionRange(pos, pos) } } })),
+        ctx.seg([['name', t('By name')], ['tc', t('By timecode')], ['length', t('Longest')], ['size', t('Biggest')], ['date', t('Newest')]], st.sort, (v) => setOpt(ctx, 'sort', v)),
+        h('label', { class: 'rp-g' }, h('span', {}, t('By folder')), ctx.switchEl(st.group, (v) => setOpt(ctx, 'group', v), t('By folder')))) : null
+      // the clips on screen, a page at a time, under their folder when grouped
+      const page = cl.slice(0, st.shown)
+      let body
+      if (!all.length) body = h('p', { class: 'note' }, t('No clips in this folder.'))
+      else if (!cl.length) body = h('p', { class: 'note' }, t('Nothing matches.'))
+      else if (st.group) {
+        const dirs = new Map()
+        for (const c of page) { if (!dirs.has(c.dir)) dirs.set(c.dir, []); dirs.get(c.dir).push(c) }
+        body = [...dirs].map(([d, list]) => h('section', { class: 'group' },
+          h('div', { class: 'g-head' }, ico('folder'), h('span', { class: 'g-t', title: d }, d.split(/[\\/]/).filter(Boolean).pop() || d),
+            h('span', { class: 'g-s' }, (list.length === 1 ? t('1 clip') : t('{n} clips', { n: num(list.length) })) + ' · ' + dur(list.reduce((n, c) => n + (c.dur || 0), 0)) + ' · ' + bytes(list.reduce((n, c) => n + (c.size || 0), 0)))),
+          h('div', { class: 'files' }, ...list.map((c) => clipEl(ctx, c)))))
+      } else body = h('section', { class: 'group' }, h('div', { class: 'files', style: { paddingTop: '8px' } }, ...page.map((c) => clipEl(ctx, c))))
       return h('main', {}, h('div', { class: 'res' },
         h('div', { class: 'sum' },
-          h('span', { class: 'chip tint' }, h('i'), cl.length === 1 ? t('1 clip') : t('{n} clips', { n: num(cl.length) })),
+          h('span', { class: 'chip tint' }, h('i'), cl.length === all.length ? (cl.length === 1 ? t('1 clip') : t('{n} clips', { n: num(cl.length) })) : t('{a} of {b} clips shown', { a: num(cl.length), b: num(all.length) })),
           h('span', { class: 'chip' }, dur(total) + ' ' + t('in all')), h('span', { class: 'chip' }, bytes(size)),
-          ...codecs.map((c) => h('span', { class: 'chip' }, c)),
+          // every codec with how many clips and how long (Alex, 29 Oct: totals per codec)
+          ...codecTotals(cl).map((c) => h('span', { class: 'chip' }, `${c.name} · ${num(c.n)}` + (c.dur ? ' · ' + dur(c.dur) : ''))),
           h('span', { class: 'chip', title: st.res.root }, st.res.root.split(/[\\/]/).filter(Boolean).pop() || st.res.root)),
-        cl.length ? h('section', { class: 'group' }, h('div', { class: 'files', style: { paddingTop: '8px' } }, ...cl.map((c) => clipEl(ctx, c))))
-          : h('p', { class: 'note' }, t('No clips in this folder.'))))
+        tools, body, moreEl(ctx, st, cl.length - page.length)))
     }
     return h('main', {}, h('div', { class: 'home' }, h('div', { class: 'card' },
       h('div', { class: 'hero' }, h('h1', { html: t('A <b>report</b> of the clips.') }),
         h('p', {}, t('Every clip of a card or a folder: length, codec, picture, frame rate, timecode and sound, with a frame of each. Save it as a PDF for the post house or as a list for Excel.'))),
       folderBox(ctx, st, 'report'),
+      h('div', { class: 'opts' }, h('div', { class: 'opt' }, h('span', {}, h('b', {}, t('Photos too')), h('small', {}, t('Pictures from cameras and phones as well: their size and a frame.'))),
+        ctx.switchEl(st.photos, (v) => setOpt(ctx, 'photos', v), t('Photos too')))),
       h('div', { class: 'go' }, h('button', { class: 'btn main big', disabled: !st.root, onclick: () => start(ctx) }, ico('list'), t('Make the report'))),
       h('p', { class: 'note' }, t('Nothing is changed: RoarKit only reads the clips.')))))
   },
   demo: {
-    'report-scan': async ({ root }, emit) => { await demoRun('report-progress', SAMPLE_CLIPS.length, emit); return { root, clips: SAMPLE_CLIPS, took: 4200 } },
+    'report-scan': async ({ root }, emit) => { await demoRun('report-progress', SAMPLE_CLIPS.length, emit); return { id: 'demo-' + Date.now(), root, clips: SAMPLE_CLIPS, at: Date.now(), took: 4200 } },
     'report-pdf': async () => '/Users/alex/Desktop/Media report CARD_A.pdf',
     'media-save-csv': async () => '/Users/alex/Desktop/Media report CARD_A.csv',
   },

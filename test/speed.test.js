@@ -21,6 +21,24 @@ const { speedTest, codecTable, NAME } = require('../electron/tools/speed')
   assert.deepStrictEqual(fs.readdirSync(dir), ['keep.txt'])
   assert.ok(!fs.readdirSync(dir).some((f) => f.startsWith(NAME)))
 
+  // a long write (sustained): speed kept every half second, stops at its time, reads back only the first part, cleans up
+  const long = await speedTest(dir, 3e9, () => {}, () => false, { sustained: true, seconds: 1.2, readBytes: 64 * 1024 * 1024 })
+  assert.ok(long.sustained && long.samples.length >= 1, 'samples kept')
+  assert.ok(long.bytes > 0 && long.bytes <= 3e9)
+  assert.ok(long.read > 0)
+  assert.deepStrictEqual(fs.readdirSync(dir), ['keep.txt'])
+
+  // a drive without room: a plain message, and nothing left behind
+  await assert.rejects(speedTest(dir, 1e15), /Not enough free space/)
+  assert.deepStrictEqual(fs.readdirSync(dir), ['keep.txt'])
+  // errors a person can act on
+  const { plainError } = require('../electron/tools/speed')
+  assert.match(plainError(Object.assign(new Error('EROFS: read-only file system'), { code: 'EROFS' })).message, /cannot be written/)
+  assert.match(plainError(Object.assign(new Error('x'), { code: 'ENOSPC' })).message, /filled up/)
+  assert.match(plainError(Object.assign(new Error('x'), { code: 'ENOENT' })).message, /not there/)
+  // a folder that is gone says so too, through the test itself
+  await assert.rejects(speedTest(path.join(dir, 'gone'), 100e6), /not there/)
+
   // the table: ProRes grows with the picture, BRAW 3:1 UHD about 104 MB/s at 25p
   const t = codecTable()
   assert.deepStrictEqual(t.sizes, ['HD', 'UHD', '6K', '8K'])

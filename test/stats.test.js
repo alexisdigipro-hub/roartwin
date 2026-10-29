@@ -28,6 +28,19 @@ Pages occupied by compressor:            100000.`)
 assert.strictEqual(vm.page, 16384)
 assert.strictEqual(vm.app, (300000 + 150000 + 100000) * 16384)
 assert.strictEqual(s.parseVmStat('nothing'), null)
+// macOS 10.13 on: the apps' memory is the anonymous pages; files read lately are cache, as Activity Monitor counts it
+const vm2 = s.parseVmStat(`Mach Virtual Memory Statistics: (page size of 16384 bytes)
+Pages free:                               12000.
+Pages active:                            300000.
+Pages inactive:                          290000.
+Pages speculative:                         5000.
+Pages wired down:                        150000.
+Pages purgeable:                           3000.
+File-backed pages:                       350000.
+Anonymous pages:                         245000.
+Pages occupied by compressor:            100000.`)
+assert.strictEqual(vm2.app, (245000 - 3000 + 150000 + 100000) * 16384)
+assert.strictEqual(vm2.cached, (350000 + 3000) * 16384)
 assert.strictEqual(s.parsePressure('1\n'), 'normal')
 assert.strictEqual(s.parsePressure('4'), 'critical')
 assert.strictEqual(s.parsePressure(''), '')
@@ -42,8 +55,17 @@ en0        1500  192.168.1     192.168.1.20      1000000     -  5000000000   800
 en5*       1500  <Link#12>                          10     0       1000       10     0       2000     0
 utun3      1380  <Link#20>                         100     0     777777      100     0     777777     0`
 const net = s.parseNetstat(ns)
-assert.deepStrictEqual(net, { rx: 5000001000, tx: 700002000, cards: ['en0', 'en5'] })
-assert.deepStrictEqual(s.parseWinNet('[{"Name":"Ethernet","ReceivedBytes":100,"SentBytes":50},{"Name":"Wi-Fi","ReceivedBytes":10,"SentBytes":5}]'), { rx: 110, tx: 55, cards: ['Ethernet', 'Wi-Fi'] })
+assert.deepStrictEqual([net.rx, net.tx, net.cards], [5000001000, 700002000, ['en0', 'en5']])
+assert.deepStrictEqual(net.per.en0, { rx: 5000000000, tx: 700000000 })
+// a port with no traffic is not named (a Mac's Thunderbolt ports are cards too)
+assert.deepStrictEqual(s.parseNetstat(ns.replace('en5*       1500  <Link#12>                          10     0       1000       10     0       2000     0', 'en5*       1500  <Link#12>                           0     0          0        0     0          0     0')).cards, ['en0'])
+// the rate card by card: Wi-Fi coming up between two readings is no spike, a counter starting again is no minus
+const r1 = { per: { en0: { rx: 1000, tx: 500 } } }
+assert.deepStrictEqual(s.netRate(r1, { per: { en0: { rx: 3000, tx: 900 }, en1: { rx: 9e12, tx: 9e12 } } }, 2), { down: 1000, up: 200 })
+assert.deepStrictEqual(s.netRate(r1, { per: { en0: { rx: 10, tx: 10 } } }, 1), { down: 0, up: 0 })
+assert.strictEqual(s.netRate(null, r1, 1), null)
+const wn = s.parseWinNet('[{"Name":"Ethernet","ReceivedBytes":100,"SentBytes":50},{"Name":"Wi-Fi","ReceivedBytes":10,"SentBytes":5}]')
+assert.deepStrictEqual([wn.rx, wn.tx, wn.cards, wn.per['Wi-Fi']], [110, 55, ['Ethernet', 'Wi-Fi'], { rx: 10, tx: 5 }])
 
 // the battery
 const b = s.parseBatt(`Now drawing from 'AC Power'
@@ -97,5 +119,74 @@ assert.strictEqual(s.cpuUse(null, [t(1, 1)]), null)
 assert.strictEqual(Math.round(s.verdict(500, 100).upload10GB * 10) / 10, 13.3)
 assert.strictEqual(s.verdict(0, 0).upload10GB, null)
 assert.strictEqual(s.jitterOf([10, 12, 11]), 1.5)
+// jitter in the order the pings were sent: sorted it would read 6.7 ms for a line that swings by 20
+assert.strictEqual(s.pingOf([30, 10, 30, 10]).jitter, 20)
+assert.strictEqual(s.pingOf([50, 10, 12, 11, 13, 14, 12, 15, 90, 80]).ping, (10 + 11 + 12 + 12 + 13 + 14 + 15) / 7)
+// a phase's speed: the warm-up left out
+assert.strictEqual(s.rateOf([{ t: 0, bytes: 0 }, { t: 1500, bytes: 1e6 }, { t: 2500, bytes: 13.5e6 }]), 100)
+assert.strictEqual(s.rateOf([{ t: 0, bytes: 0 }]), 0)
 
-console.log('stats: all good')
+// the address of the card that carries the traffic, not a virtual machine's bridge
+assert.strictEqual(s.localAddress({ lo0: [{ family: 'IPv4', internal: true, address: '127.0.0.1' }], bridge100: [{ family: 'IPv4', internal: false, address: '192.168.64.1' }], en0: [{ family: 'IPv4', internal: false, address: '192.168.1.20' }] }), '192.168.1.20')
+assert.strictEqual(s.localAddress({}), '')
+
+// the graphics
+assert.deepStrictEqual(s.parseGpu(JSON.stringify({ SPDisplaysDataType: [{ _name: 'Apple M3 Max', sppci_model: 'Apple M3 Max', sppci_cores: '40' }] })), { name: 'Apple M3 Max', cores: 40 })
+assert.strictEqual(s.parseGpu('{}'), null)
+assert.strictEqual(s.parseGpuUse('+-o AGXAcceleratorG15X  <class AGXAcceleratorG15X>\n    "PerformanceStatistics" = {"In use system memory"=123,"Device Utilization %"=37,"Renderer Utilization %"=35}'), 37)
+assert.strictEqual(s.parseGpuUse(''), null)
+
+// why it is slow, in plain words
+const calm = { mem: { pressure: 'normal', swap: { used: 0 } }, therm: { state: 'nominal' }, top: { cpu: [{ name: 'Finder', cpu: 1 }] }, drives: [{ mount: '/', total: 100, free: 50 }], cpu: { total: 12 }, battery: { health: 95 } }
+assert.deepStrictEqual(s.advice(calm), [])
+const busy = s.advice({ ...calm, mem: { pressure: 'critical', swap: { used: 12 * 1024 ** 3 } }, therm: { state: 'serious' }, top: { cpu: [{ name: 'DaVinci Resolve', cpu: 182.4 }, { name: 'kernel_task', cpu: 300 }] }, drives: [{ mount: '/', total: 100, free: 6 }], cpu: { total: 95 }, battery: { health: 72 } })
+assert.deepStrictEqual(busy.map((x) => x.level), ['bad', 'warn', 'bad', 'warn', 'bad', 'warn'])
+assert.deepStrictEqual(busy[3].vars, { a: 'DaVinci Resolve', b: 182 })
+assert.ok(!busy.some((x) => x.vars.a === 'kernel_task'), 'kernel_task is heat, not a program')
+assert.deepStrictEqual(s.advice({ ...calm, cpu: { total: 95 } }).map((x) => x.vars.a), [95])
+assert.deepStrictEqual(s.advice(null), [])
+
+// the internet speed test against a stand-in for Cloudflare on this computer: it measures, it stops, it says when the
+// line is not there, and a line that stalls ends its phase instead of hanging
+const http = require('http')
+class Stopped extends Error { constructor() { super('Stopped') } }
+const ctxOf = (stopAt = Infinity) => { const t0 = Date.now(); return { stopped: () => Date.now() - t0 > stopAt, engine: { Stopped } } }
+;(async () => {
+  let stall = false
+  const server = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x')
+    if (u.pathname === '/cdn-cgi/trace') return res.end('ip=203.0.113.9\ncolo=ATH\nloc=GR\n')
+    if (u.pathname === '/__down') {
+      const n = +u.searchParams.get('bytes') || 0
+      res.writeHead(200, { 'Content-Length': n })
+      if (stall && n) { res.write(Buffer.alloc(1000)); return } // then nothing more
+      let left = n
+      const piece = Buffer.alloc(64 * 1024)
+      const more = () => { while (left > 0) { const k = Math.min(left, piece.length); left -= k; if (!res.write(piece.subarray(0, k))) return res.once('drain', more) } res.end() }
+      return more()
+    }
+    if (u.pathname === '/__up') { req.on('data', () => {}); req.on('end', () => res.end('ok')); return }
+    res.statusCode = 404; res.end()
+  })
+  await new Promise((ok) => server.listen(0, '127.0.0.1', ok))
+  const base = `http://127.0.0.1:${server.address().port}`
+  const ticks = []
+  const quick = { down: 1800, up: 1500, streams: [2, 2] }
+  const r = await s.speedTest(ctxOf(), (ev, v) => ticks.push(v.phase), { base, times: quick })
+  assert.ok(r.down > 1 && r.up > 1, 'measured both ways: ' + r.down.toFixed(0) + ' / ' + r.up.toFixed(0))
+  assert.ok(r.ping >= 0 && r.jitter >= 0 && r.ip === '203.0.113.9' && r.colo === 'ATH')
+  assert.ok(['ping', 'down', 'up'].every((p) => ticks.includes(p)), 'live progress for every phase')
+  assert.ok(r.upload10GB > 0)
+  // Stop in the middle of the download
+  await assert.rejects(s.speedTest(ctxOf(900), () => {}, { base, times: quick }), (e) => e instanceof Stopped)
+  // no line: a closed port
+  const closed = http.createServer(); await new Promise((ok) => closed.listen(0, '127.0.0.1', ok)); const dead = `http://127.0.0.1:${closed.address().port}`; await new Promise((ok) => closed.close(ok))
+  await assert.rejects(s.speedTest(ctxOf(), () => {}, { base: dead, times: quick }), /could not reach Cloudflare/)
+  // a line that stalls: the phase ends at its time plus a grace, not never
+  stall = true
+  const t0 = Date.now()
+  await assert.rejects(s.speedTest(ctxOf(), () => {}, { base, times: { down: 600, up: 400, streams: [1, 1] } }), /could not reach Cloudflare/)
+  assert.ok(Date.now() - t0 < 12000, 'it did not hang')
+  server.close()
+  console.log('stats: all good')
+})().catch((e) => { console.error(e); process.exit(1) })

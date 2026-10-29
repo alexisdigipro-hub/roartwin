@@ -4,7 +4,7 @@ const assert = require('assert')
 const fs = require('fs')
 const os = require('os')
 const path = require('path')
-const { walk, nodeView, findNode, byKind, biggest, largeOld, parsePlist, volumeFromPlist, parseSnapshots, mayTrash, kindOf } = require('../electron/tools/space')
+const { walk, nodeView, findNode, byKind, biggest, largeOld, parsePlist, volumeFromPlist, parseSnapshots, mayTrash, kindOf, systemSkips, places } = require('../electron/tools/space')
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'roartwin-space-'))
 const put = (rel, bytes, ageDays = 0) => {
@@ -76,6 +76,20 @@ fs.symlinkSync(outside, path.join(root, 'link-out'))
   assert.deepStrictEqual(volumeFromPlist(parsePlist('nonsense')), { name: '', mount: '', fs: '', total: null, free: null, containerFree: null, internal: false, ssd: false })
   assert.deepStrictEqual(parseSnapshots('Snapshots for disk /:\ncom.apple.TimeMachine.2026-10-27-101530.local\ncom.apple.os.update-ABC\n\n'), ['com.apple.TimeMachine.2026-10-27-101530.local', 'com.apple.os.update-ABC'])
   assert.deepStrictEqual(parseSnapshots(''), [])
+
+  // This Mac (29 Oct): other drives and macOS's second view of the same data are left out, so nothing counts twice
+  assert.ok(systemSkips('/', 'darwin').includes('/Volumes') && systemSkips('/', 'darwin').includes('/System/Volumes'))
+  assert.ok(systemSkips('/', 'linux').includes('/proc'))
+  assert.deepStrictEqual(systemSkips('/Users/alex', 'darwin'), [], 'a folder of your own is walked whole')
+  const skipped = await walk(root, { skipHidden: true, skipPaths: [path.join(root, 'Shoot')] })
+  assert.strictEqual(skipped.root.size, total - 19500, 'a path to skip is left out (Shoot: 9000 + 7000 + 3000 + 500)')
+  assert.deepStrictEqual(r.denied, [], 'every folder here could be read')
+  // the quick starts: home and the computer's own drive, always there
+  const pl = await places()
+  assert.strictEqual(pl.home, os.homedir())
+  assert.ok(pl.disk && Array.isArray(pl.drives))
+  const win = await places('win32')
+  assert.ok(/^[A-Z]:\\$/i.test(win.disk), 'Windows starts on its system drive')
 
   fs.rmSync(root, { recursive: true, force: true }); fs.rmSync(outside, { recursive: true, force: true })
   console.log('space: all good')

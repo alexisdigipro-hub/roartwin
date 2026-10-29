@@ -290,3 +290,6 @@ html[data-motion="less"] *, html[data-motion="less"] *::before, html[data-motion
 .note a { color: inherit; } .note a:hover { color: var(--text); }
 .foot { box-shadow: 0 20px 60px var(--shadow) !important; }
 .toast { box-shadow: 0 16px 40px var(--shadow) !important; }
+/* Clean up: the biggest things inside a place; a window with many choices wraps its buttons (Choose by rule) */
+.cl-top { display: block; margin-top: 3px; color: var(--dim) !important; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 52ch; }
+.sheet .row { flex-wrap: wrap; }

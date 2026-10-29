@@ -13,6 +13,9 @@ const { execFile } = require('child_process')
 const updater = require('./updater')
 
 nativeTheme.themeSource = 'dark'
+/* the look the person chose (Settings > Appearance), kept here from the last run so the window opens in it, not dark first */
+const LOOK_FILE = () => path.join(app.getPath('userData'), 'look.json')
+const savedTheme = () => { try { return JSON.parse(fs.readFileSync(LOOK_FILE(), 'utf8')).theme || 'dark' } catch { return 'dark' } }
 /* RoarTwin is called RoarKit since 28 Oct: its settings, its Vault and everything it keeps stay in the old folder,
    whatever the app is called, so nothing is lost when the app itself takes the new name. */
 app.setPath('userData', path.join(app.getPath('appData'), 'RoarTwin'))
@@ -47,8 +50,12 @@ const frame = process.platform === 'darwin'
   : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#16181d', symbolColor: '#eef0f3', height: 58 } }
 
 function open() {
+  const th = savedTheme()
+  nativeTheme.themeSource = th === 'auto' ? 'system' : th === 'light' ? 'light' : 'dark'
+  const light = !nativeTheme.shouldUseDarkColors
+  const look = process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 } } : frame
   win = new BrowserWindow({
-    width: 1320, height: 860, minWidth: 900, minHeight: 600, show: false, backgroundColor: '#16181d', autoHideMenuBar: true, ...frame,
+    width: 1320, height: 860, minWidth: 900, minHeight: 600, show: false, backgroundColor: light ? '#f3f4f7' : '#16181d', autoHideMenuBar: true, ...look,
     webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   })
   win.loadURL(HOME)
@@ -141,6 +148,9 @@ ipcMain.handle('twin:copy', async (e, opts) => {
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
     lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false, version: app.getVersion() }, tick, () => stopNow)
+    if (opts.eject && process.platform === 'darwin' && !lastCopy.failed.length && /^\/Volumes\/[^/]+\/?$/.test(String(opts.source))) {
+      lastCopy.ejected = await new Promise((done) => execFile('diskutil', ['eject', String(opts.source)], { timeout: 30e3 }, (err) => done(!err)))
+    }
     jobDone('copy')
     return lastCopy
   } catch (err) {
@@ -240,7 +250,9 @@ ipcMain.handle('twin:clean-look', async (e) => {
     const open = clean.openApps(items, await processes())
     const tick = (r) => { try { e.sender.send('twin:clean-tick', { id: r.id, size: r.size, files: r.files }) } catch { /* window gone */ } }
     const got = await clean.measure(items, tick, () => stopNow)
-    lastClean = items.map((item, i) => ({ ...item, match: undefined, skip: undefined, ...got[i], entries: undefined, count: got[i].entries.length, open: (item.apps || []).filter((a) => open.includes(a)) }))
+    lastClean = items.map((item, i) => ({ ...item, match: undefined, skip: undefined, ...got[i], entries: undefined, count: got[i].entries.length, open: (item.apps || []).filter((a) => open.includes(a)),
+      // the biggest things inside, so the person sees what goes before it goes (Alex, 28 Oct)
+      top: [...got[i].entries].sort((a, b) => b.size - a.size).slice(0, 5).map((en) => ({ path: en.path, name: path.basename(en.path), size: en.size })) }))
     return lastClean
   } catch (err) {
     if (err instanceof clean.Stopped) return { stopped: true }
@@ -317,7 +329,7 @@ const ctx = {
 }
 tools.register(ctx)
 
-const known = (p) => shown.has(p) || (lastClean || []).some((c) => (c.found || []).includes(p))
+const known = (p) => shown.has(p) || (lastClean || []).some((c) => (c.found || []).includes(p) || (c.top || []).some((x) => x.path === p))
   || (last?.groups || []).some((g) => g.files.some((f) => f.path === p))
   || (lastBackup?.missing || []).some((f) => f.path === p || f.other === p)
   || !!lastCopy && [...lastCopy.reports, ...(lastCopy.mhl || []), ...lastCopy.targets, ...lastCopy.failed.map((f) => f.path)].includes(p)
@@ -334,8 +346,10 @@ ipcMain.handle('twin:export', async (_e, text) => {
 ipcMain.handle('twin:version', () => app.getVersion())
 /* Settings (Alex, 28 Oct): the look of the app's own windows, menus and scroll bars, and the end-of-job notification */
 const prefs = { lang: 'en', theme: 'dark', notify: true, sound: false, company: '', companyLine: '' }
+nativeTheme.on('updated', () => { if (prefs.theme === 'auto') { try { win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#16181d' : '#f3f4f7') } catch { /* closing */ } } })
 ipcMain.handle('twin:prefs', (_e, v) => {
   Object.assign(prefs, Object.fromEntries(Object.entries(v || {}).filter(([k]) => k in prefs)))
+  try { fs.writeFileSync(LOOK_FILE(), JSON.stringify({ theme: prefs.theme })) } catch { /* the next start opens dark, nothing more */ }
   nativeTheme.themeSource = prefs.theme === 'auto' ? 'system' : prefs.theme === 'light' ? 'light' : 'dark'
   const light = !nativeTheme.shouldUseDarkColors
   try {

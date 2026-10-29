@@ -44,6 +44,29 @@ function unsafe(name) {
   const n = String(name).replace(/\\/g, '/')
   return n.startsWith('/') || /^[a-z]:/i.test(n) || n.startsWith('//') || n.split('/').includes('..')
 }
+/* a link inside the archive that points outside the folder (absolute, or climbing above it with ".."): taking it
+   out, and anything stored "through" it, could write outside the folder (audit, 29 Oct) */
+function linkOutside(name, target) {
+  const t = String(target || '').replace(/\\/g, '/')
+  if (!t) return false
+  if (t.startsWith('/') || /^[a-z]:/i.test(t) || t.startsWith('//')) return true
+  const parts = String(name).replace(/\\/g, '/').split('/').filter(Boolean).slice(0, -1)
+  for (const step of t.split('/')) {
+    if (!step || step === '.') continue
+    if (step === '..') { if (!parts.length) return true; parts.pop() } else parts.push(step)
+  }
+  return false
+}
+/* every entry that must stay in the archive: outside the folder, a link that points outside, or stored under a link */
+function unsafeEntries(entries) {
+  const links = entries.filter((e) => e.link || e.hard).map((e) => e.name.replace(/\/+$/, ''))
+  return entries.filter((e) => unsafe(e.name) || ((e.link || e.hard) && (e.hard ? unsafe(e.target) : linkOutside(e.name, e.target)))
+    || links.some((l) => e.name.startsWith(l + '/'))).map((e) => e.name)
+}
+/* bsdtar writes a name it cannot print in the C locale as octal escapes (\316\221 for Α): read them back as UTF-8 */
+const unescapeName = (n) => String(n).replace(/(?:\\[0-7]{3})+/g, (m) => Buffer.from(m.match(/\\[0-7]{3}/g).map((x) => parseInt(x.slice(1), 8))).toString('utf8'))
+/* a name for bsdtar's -T list, which takes patterns: [ ] * ? and \ are made plain */
+const plainPattern = (n) => String(n).replace(/[\\[\]*?]/g, (c) => '\\' + c)
 // the Mac's and Windows' leftovers in an archive
 const isJunk = (name) => { const b = String(name).replace(/\\/g, '/').split('/').filter(Boolean); return b.some((x) => x === '__MACOSX' || x === '.DS_Store' || x.startsWith('._') || x === 'Thumbs.db' || x === 'desktop.ini') }
 
@@ -80,10 +103,14 @@ function parseList(text, now = new Date()) {
         if (d - now > 86400000 * 31) d = new Date(now.getFullYear() - 1, mon, day, hh, mm) // ls style: no year means the last twelve months
         mtime = d.getTime()
       } else mtime = new Date(+m[6], mon, day).getTime()
-    } else { out.push({ name: line, size: 0, mtime: 0, dir: line.endsWith('/') }); continue }
-    if (mode[0] === 'l') name = name.replace(/ -> .*$/, '')
-    if (mode[0] === 'h') name = name.replace(/ link to .*$/, '')
-    out.push({ name, size, mtime, dir: mode[0] === 'd' || name.endsWith('/'), link: mode[0] === 'l' })
+    } else { out.push({ name: unescapeName(line), size: 0, mtime: 0, dir: line.endsWith('/') }); continue }
+    let target = ''
+    if (mode[0] === 'l') { const k = name.lastIndexOf(' -> '); if (k >= 0) { target = name.slice(k + 4); name = name.slice(0, k) } }
+    if (mode[0] === 'h') { const k = name.lastIndexOf(' link to '); if (k >= 0) { target = name.slice(k + 9); name = name.slice(0, k) } }
+    // GNU tar marks a hard link with "link to" too, under an ordinary mode
+    else if (/ link to /.test(name) && mode[0] === '-') { const k = name.lastIndexOf(' link to '); target = name.slice(k + 9); name = name.slice(0, k); mode = 'h' + mode.slice(1) }
+    name = unescapeName(name); target = unescapeName(target)
+    out.push({ name, size, mtime, dir: mode[0] === 'd' || name.endsWith('/'), link: mode[0] === 'l', hard: mode[0] === 'h', ...(target ? { target } : {}) })
   }
   return out
 }
@@ -94,11 +121,12 @@ const EXT = { zip: '.zip', '7z': '.7z', 'tar.gz': '.tar.gz', 'tar.xz': '.tar.xz'
 const JUNK_PATTERNS = ['.DS_Store', '__MACOSX', '._*', 'Thumbs.db', 'desktop.ini']
 
 /* the tar arguments for a new archive: items are absolute paths, each added by its own name from its own folder */
-function makeArgs({ format = 'zip', level = 'normal', out, items, junk = true, flavour = 'bsd', platform = process.platform }) {
+function makeArgs({ format = 'zip', level = 'normal', out, items, junk = true, flavour = 'bsd', platform = process.platform, password = '' }) {
   const lv = (LEVEL[format] || LEVEL.zip)[level] ?? LEVEL[format]?.normal ?? 6
   const a = ['-c', '-v', '-f', out]
   if (flavour === 'bsd') {
-    if (format === 'zip') a.push('--format', 'zip', '--options', `zip:compression-level=${lv}`)
+    // a ZIP locked with a password: AES-256, which a Mac, Windows 11 and 7-Zip open
+    if (format === 'zip') a.push('--format', 'zip', '--options', password ? `zip:compression-level=${lv},zip:encryption=aes256` : `zip:compression-level=${lv}`, ...(password ? ['--passphrase', password] : []))
     else if (format === '7z') a.push('--format', '7zip', '--options', `7zip:compression-level=${lv}`)
     else if (format === 'tar.gz') a.push('-z', '--options', `gzip:compression-level=${lv}`)
     else if (format === 'tar.xz') a.push('-J', '--options', `xz:compression-level=${lv}`)
@@ -116,23 +144,54 @@ function makeArgs({ format = 'zip', level = 'normal', out, items, junk = true, f
 }
 
 /* ---------- running tar ---------- */
+/* what a tar can make: bsdtar names the libraries it was built with (Windows' tar.exe has no liblzma, so no 7z or
+   tar.xz there); GNU tar makes tar kinds through the compressors this computer has */
+function writable(flavour, version, has = () => true) {
+  if (flavour === 'bsd') {
+    const v = String(version).toLowerCase()
+    const listed = /zlib|liblzma|bz2lib/.test(v)
+    const zlib = !listed || v.includes('zlib'), lzma = !listed || v.includes('liblzma')
+    return ['zip', '7z', 'tar.gz', 'tar.xz'].filter((f) => (f === '7z' || f === 'tar.xz' ? lzma : zlib))
+  }
+  if (flavour === 'gnu') return [has('gzip') && 'tar.gz', has('xz') && 'tar.xz'].filter(Boolean)
+  return []
+}
 function findTar(platform = process.platform) {
-  if (platform === 'win32') return { bin: path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe'), flavour: 'bsd' }
+  if (platform === 'win32') {
+    const bin = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe')
+    let v = ''
+    try { v = execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 5000, windowsHide: true }) } catch { /* an old Windows: no tar */ }
+    return { bin: v ? bin : '', flavour: v ? 'bsd' : '', formats: v ? writable('bsd', v) : [] }
+  }
   const cands = platform === 'darwin' ? ['/usr/bin/bsdtar', '/usr/bin/tar'] : ['/usr/bin/bsdtar', '/usr/local/bin/bsdtar', '/usr/bin/tar', '/bin/tar']
   for (const bin of cands) {
     if (!fs.existsSync(bin)) continue
     let v = ''
     try { v = execFileSync(bin, ['--version'], { encoding: 'utf8', timeout: 5000 }) } catch { continue }
-    return { bin, flavour: /bsdtar|libarchive/i.test(v) ? 'bsd' : 'gnu' }
+    const flavour = /bsdtar|libarchive/i.test(v) ? 'bsd' : 'gnu'
+    const has = (p) => ['/usr/bin', '/bin', '/usr/local/bin', '/opt/homebrew/bin'].some((d) => fs.existsSync(path.join(d, p)))
+    return { bin, flavour, formats: writable(flavour, v, has) }
   }
-  return { bin: '', flavour: '' }
+  return { bin: '', flavour: '', formats: [] }
+}
+/* the words tar's messages are in: UTF-8, so a Greek name comes back as itself and not as \316\221 escapes (a Mac app
+   started from the Finder has no LANG of its own) */
+const LOCALE = { darwin: { LC_ALL: 'en_US.UTF-8' }, linux: { LC_ALL: 'C.UTF-8' } }
+/* tar's error, said so a person can act on it */
+function friendly(err, info = {}) {
+  const e = String(err || '')
+  if (/no space left|disk full|not enough space/i.test(e)) return 'The drive is full. Free some space, or choose another place for it.'
+  if (/truncat|unexpected end|premature end|damaged|corrupt|crc|checksum|bad (archive|header)|invalid (central|zip|header)|not .* archive|unrecognized archive/i.test(e)) return 'The archive is damaged or cut short: it was not downloaded or copied whole.'
+  if (/permission denied|operation not permitted|read-only/i.test(e)) return 'This app may not write there. Choose another place.'
+  return cleanErr(e) || info.fallback || ''
 }
 
 /* run a program, every output line to onLine; stop() ends it */
 function run(bin, args, { stop = () => false, onLine = () => {}, env } = {}) {
   return new Promise((ok) => {
     let p
-    try { p = spawn(bin, args, { windowsHide: true, env: env ? { ...process.env, ...env } : process.env }) } catch (e) { return ok({ code: -1, out: '', err: String(e.message || e) }) }
+    // no input: a password tar would ask for on a terminal is never waited for (it answers "required" instead)
+    try { p = spawn(bin, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: env ? { ...process.env, ...env } : process.env }) } catch (e) { return ok({ code: -1, out: '', err: String(e.message || e) }) }
     const out = [], err = []
     let errLen = 0, killed = false
     const split = (buf, keep) => {
@@ -140,7 +199,8 @@ function run(bin, args, { stop = () => false, onLine = () => {}, env } = {}) {
       return (c) => { const s = rest + c.toString('utf8'); const lines = s.split(/\r?\n/); rest = lines.pop(); for (const l of lines) { onLine(l); if (keep) keep(l) } }
     }
     p.stdout.on('data', split(null, (l) => out.push(l)))
-    p.stderr.on('data', split(null, (l) => { if (errLen < 400) { err.push(l); errLen++ } }))
+    // bsdtar's -v writes "x name" / "a name" to stderr: those are progress, not the error, and must not crowd it out
+    p.stderr.on('data', split(null, (l) => { if (/^[xa] /.test(l)) return; err.push(l); if (++errLen > 60) err.shift() }))
     const check = () => { if (stop() && !killed) { killed = true; p.kill('SIGKILL') } }
     const watch = setInterval(check, 250)
     check()
@@ -167,10 +227,11 @@ async function countItems(items, junk) {
 }
 
 /* the tool itself, on a given tar (the tests give it theirs) */
-function makeTool({ tar = findTar(), platform = process.platform } = {}) {
+function makeTool({ tar = findTar(), platform = process.platform, freeSpace = defaultFree } = {}) {
+  const env = LOCALE[platform]
   const which = (name) => { for (const d of ['/usr/bin', '/usr/local/bin', '/opt/homebrew/bin', '/bin']) { const p = path.join(d, name); if (fs.existsSync(p)) return p } return '' }
 
-  async function list(file, { stop } = {}) {
+  async function list(file, { stop, password = '' } = {}) {
     const k = kindOf(file)
     const dmg = Object.keys(NOT_ARCHIVE).find((e) => String(file).toLowerCase().endsWith(e))
     if (dmg) throw new Error(NOT_ARCHIVE[dmg])
@@ -183,28 +244,42 @@ function makeTool({ tar = findTar(), platform = process.platform } = {}) {
     }
     if (!tar.bin) throw new Error('This computer has no tar to open archives with.')
     if (tar.flavour === 'gnu' && !/^tar/.test(k.kind)) throw new Error('This computer\'s tar opens only tar archives.')
-    const r = await run(tar.bin, ['-t', '-v', '-f', file], { stop })
+    const args = ['-t', '-v', '-f', file]
+    if (password && tar.flavour === 'bsd') args.push('--passphrase', password)
+    const r = await run(tar.bin, args, { stop, env })
     if (r.killed) throw new Stopped()
-    if (r.code !== 0 && !r.out) throw new Error(needsPass(r.err) ? 'This archive is locked with a password.' : cleanErr(r.err) || 'The archive could not be read.')
+    // a RAR or 7z whose names are locked too: the names come only with the password
+    if (r.code !== 0 && !r.out && needsPass(r.err)) return { path: file, kind: k.kind, needPassword: true, wrong: !!password, packed: st.size }
+    if (r.code !== 0 && !r.out) throw new Error(friendly(r.err) || 'The archive could not be read.')
     const entries = parseList(r.out)
     const filesOnly = entries.filter((e) => !e.dir)
     return {
       path: file, kind: k.kind, entries: entries.slice(0, 3000), count: entries.length, files: filesOnly.length,
       size: filesOnly.reduce((n, e) => n + e.size, 0), packed: st.size,
-      unsafe: entries.filter((e) => unsafe(e.name)).map((e) => e.name),
+      unsafe: unsafeEntries(entries),
       junk: entries.filter((e) => isJunk(e.name)).length,
+      // a listing that ended in an error: the archive is cut short or damaged (audit, 29 Oct: it used to look whole)
+      ...(r.code !== 0 ? { damaged: friendly(r.err) || 'The archive is damaged or cut short: it was not downloaded or copied whole.' } : {}),
+      ...(password ? { locked: true } : {}),
     }
   }
 
   async function extract(file, { dest = '', password = '', stop = () => false, tick = () => {} } = {}) {
-    const info = await list(file, { stop })
+    const started = Date.now()
+    const info = await list(file, { stop, password })
+    if (info.needPassword) return { needPassword: true, wrong: info.wrong }
     const parent = dest || path.dirname(file)
+    // room enough on the drive for what comes out (the listing says how much); a full drive is said before, not after
+    const free = await freeSpace(parent)
+    if (free != null && info.size && info.size > free) throw new Error(`There is not room enough there: it needs ${human(info.size)}, the drive has ${human(free)} free.`)
     const folder = freeName(parent, baseOf(file))
     await fsp.mkdir(folder, { recursive: true })
+    // the folder is the app's own, made just now: on Stop, or when nothing could come out, it goes again
+    const undo = async () => { await fsp.rm(folder, { recursive: true, force: true }).catch(() => {}) }
     if (info.single) {
       const out = path.join(folder, info.entries[0].name)
-      await single(file, info.kind, out, { stop, tick })
-      return { folder, count: 1, skipped: [] }
+      try { await single(file, info.kind, out, { stop, tick }) } catch (e) { await undo(); throw e instanceof Stopped ? e : new Error(friendly(e.message) || e.message) }
+      return { folder, count: 1, skipped: [], took: Date.now() - started }
     }
     const total = info.count || 1
     let done = 0
@@ -215,23 +290,71 @@ function makeTool({ tar = findTar(), platform = process.platform } = {}) {
     let listFile = ''
     if (info.unsafe.length) {
       listFile = path.join(folder, `.roartwin-list-${process.pid}-${Date.now()}`)
-      const keep = info.entries.length === info.count ? info.entries.filter((e) => !unsafe(e.name)).map((e) => e.name) : null
-      if (!keep) throw new Error('This archive has entries that would land outside the folder, and too many entries to leave them out one by one.')
-      await fsp.writeFile(listFile, keep.join('\n') + '\n')
+      const bad = new Set(info.unsafe)
+      const keep = info.entries.length === info.count ? info.entries.filter((e) => !bad.has(e.name)).map((e) => e.name) : null
+      if (!keep) { await undo(); throw new Error('This archive has entries that would land outside the folder, and too many entries to leave them out one by one.') }
+      // bsdtar reads the list as patterns: a name with [ ] * ? in it is made plain, or it would not be found
+      await fsp.writeFile(listFile, keep.map((n) => (tar.flavour === 'bsd' ? plainPattern(n) : n)).join('\n') + '\n')
       args.push('-T', listFile)
     }
-    const r = await run(tar.bin, args, { stop, onLine })
+    const r = await run(tar.bin, args, { stop, onLine, env })
     if (listFile) await fsp.rm(listFile, { force: true })
+    if (r.killed) { await undo(); throw new Stopped() }
+    if (r.code !== 0) {
+      if (needsPass(r.err)) { await undo(); return { needPassword: true, wrong: !!password } }
+      // a damaged archive: what came out stays, and the page says it is partly opened; nothing at all, the folder goes
+      let some = 0
+      try { some = (await fsp.readdir(folder)).length } catch { /* gone */ }
+      if (!some) { await undo(); throw new Error(friendly(r.err) || 'The archive could not be opened.') }
+      return { folder, count: Math.min(done, info.count), skipped: info.unsafe, partial: friendly(r.err) || 'The archive is damaged or cut short: it was not downloaded or copied whole.', took: Date.now() - started }
+    }
+    return { folder, count: info.count - info.unsafe.length, skipped: info.unsafe, took: Date.now() - started }
+  }
+
+  /* is every entry whole? Read through to the end without writing anything (the checksums inside are checked) */
+  async function test(file, { password = '', stop = () => false, tick = () => {} } = {}) {
+    const started = Date.now()
+    const info = await list(file, { stop, password })
+    if (info.needPassword) return { needPassword: true, wrong: info.wrong }
+    if (info.single) {
+      if (info.kind !== 'gz') return { ok: true, count: 1, took: 0, light: true }
+      try {
+        await new Promise((ok, no) => {
+          const src = fs.createReadStream(file), z = zlib.createGunzip()
+          const watch = setInterval(() => { if (stop()) src.destroy(new Stopped()) }, 250)
+          src.on('error', (e) => { clearInterval(watch); no(e) }); z.on('error', (e) => { clearInterval(watch); no(e) })
+          z.on('data', () => {}); z.on('end', () => { clearInterval(watch); ok() })
+          src.pipe(z)
+        })
+      } catch (e) { if (e instanceof Stopped) throw e; return { ok: false, count: 1, error: friendly(e.message) || e.message, took: Date.now() - started } }
+      return { ok: true, count: 1, took: Date.now() - started }
+    }
+    const total = info.count || 1
+    let done = 0
+    const args = ['-x', '-v', '-O', '-f', file]
+    if (password && tar.flavour === 'bsd') args.push('--passphrase', password)
+    // the content goes to stdout and is read away, never kept; the names come on stderr (bsdtar) or stdout (GNU -v with -O: none)
+    const r = await new Promise((ok) => {
+      let p
+      try { p = spawn(tar.bin, args, { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], env: env ? { ...process.env, ...env } : process.env }) } catch (e) { return ok({ code: -1, err: String(e.message || e) }) }
+      const err = []
+      let rest = '', killed = false
+      p.stdout.on('data', () => {})
+      p.stderr.on('data', (c) => {
+        const lines = (rest + c.toString('utf8')).split(/\r?\n/); rest = lines.pop()
+        for (const l of lines) { if (/^[x] /.test(l)) { done++; tick({ done: Math.min(done, total), total }) } else if (l) { err.push(l); if (err.length > 40) err.shift() } }
+      })
+      const watch = setInterval(() => { if (stop() && !killed) { killed = true; p.kill('SIGKILL') } }, 250)
+      p.on('error', (e) => { clearInterval(watch); ok({ code: -1, err: String(e.message || e) }) })
+      p.on('close', (code) => { clearInterval(watch); ok({ code: killed ? -2 : code, err: err.join('\n'), killed }) })
+    })
     if (r.killed) throw new Stopped()
     if (r.code !== 0) {
-      if (needsPass(r.err)) {
-        // nothing half taken out stays: the folder made for it goes again only if it is still empty
-        try { if (!(await fsp.readdir(folder)).length) await fsp.rmdir(folder) } catch { /* it has files: they stay */ }
-        return { needPassword: true, wrong: !!password }
-      }
-      throw new Error(cleanErr(r.err) || 'The archive could not be opened.')
+      if (needsPass(r.err)) return { needPassword: true, wrong: !!password }
+      return { ok: false, count: info.count, error: friendly(r.err) || 'The archive is damaged or cut short: it was not downloaded or copied whole.', took: Date.now() - started }
     }
-    return { folder, count: info.count - info.unsafe.length, skipped: info.unsafe }
+    if (info.damaged) return { ok: false, count: info.count, error: info.damaged, took: Date.now() - started }
+    return { ok: true, count: info.count, took: Date.now() - started }
   }
 
   /* a single compressed file out: gz by Node itself, the others by their own program */
@@ -267,10 +390,13 @@ function makeTool({ tar = findTar(), platform = process.platform } = {}) {
     } finally { await fd.close() }
   }
 
-  async function make(items, { format = 'zip', level = 'normal', junk = true, name = '', dest = '', stop = () => false, tick = () => {} } = {}) {
+  async function make(items, { format = 'zip', level = 'normal', junk = true, name = '', dest = '', password = '', stop = () => false, tick = () => {} } = {}) {
+    const started = Date.now()
     if (!items.length) throw new Error('Choose files or folders first.')
     if (!tar.bin) throw new Error('This computer has no tar to make archives with.')
     if (!EXT[format]) throw new Error('Unknown kind of archive.')
+    if (tar.formats && !tar.formats.includes(format)) throw new Error('This computer cannot make that kind. Choose ZIP or TAR.GZ.')
+    if (password && format !== 'zip') throw new Error('Only a ZIP can have a password.')
     const dir = dest || path.dirname(items[0])
     const base = String(name || (items.length === 1 ? path.parse(items[0]).name : 'Archive')).replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'Archive'
     const out = freeName(dir, base.endsWith(EXT[format]) ? base.slice(0, -EXT[format].length) : base, EXT[format])
@@ -278,16 +404,27 @@ function makeTool({ tar = findTar(), platform = process.platform } = {}) {
     const total = Math.max(1, files)
     let done = 0
     const onLine = (l) => { if (l && !/^(tar|bsdtar)(\.exe)?: /.test(l) && !l.endsWith('/')) { done++; tick({ done: Math.min(done, total), total }) } }
-    const args = makeArgs({ format, level, out, items, junk, flavour: tar.flavour, platform })
-    const r = await run(tar.bin, args, { stop, onLine, env: platform === 'darwin' && junk ? { COPYFILE_DISABLE: '1' } : undefined })
+    const free = await freeSpace(dir)
+    if (free != null && free < Math.min(size, 50e6)) throw new Error(`There is not room enough there: the drive has ${human(free)} free.`)
+    const args = makeArgs({ format, level, out, items, junk, flavour: tar.flavour, platform, password })
+    const r = await run(tar.bin, args, { stop, onLine, env: { ...(env || {}), ...(platform === 'darwin' && junk ? { COPYFILE_DISABLE: '1' } : {}) } })
+    // the half archive is the app's own new file: it goes (no file of the person's is touched)
     if (r.killed) { await fsp.rm(out, { force: true }); throw new Stopped() }
-    if (r.code !== 0) { await fsp.rm(out, { force: true }); throw new Error(cleanErr(r.err) || 'The archive could not be made.') }
+    if (r.code !== 0) {
+      await fsp.rm(out, { force: true })
+      if (password && /encrypt|passphrase|crypto/i.test(r.err)) throw new Error('This computer\'s tar cannot lock a ZIP with a password.')
+      throw new Error(friendly(r.err) || 'The archive could not be made.')
+    }
     const st = await fsp.stat(out)
-    return { path: out, size: st.size, files, original: size }
+    return { path: out, size: st.size, files, original: size, took: Date.now() - started, locked: !!password }
   }
 
-  return { list, extract, make, tar }
+  return { list, extract, test, make, tar }
 }
+// a size in words, for the messages from this side
+const human = (n) => { const u = ['B', 'KB', 'MB', 'GB', 'TB']; let i = 0; n = Number(n) || 0; while (n >= 1000 && i < u.length - 1) { n /= 1000; i++ } return (n >= 100 || i === 0 ? n.toFixed(0) : n.toFixed(1)) + ' ' + u[i] }
+// how much a drive has free (null when the computer does not say)
+async function defaultFree(dir) { try { const s = await fsp.statfs(dir); return Number(s.bavail) * Number(s.bsize) } catch { return null } }
 // tar's own words, without its name in front
 const cleanErr = (t) => String(t || '').split(/\r?\n/).map((l) => l.replace(/^(bsd)?tar(\.exe)?: /, '').trim()).filter(Boolean).slice(0, 2).join(' ')
 
@@ -315,22 +452,23 @@ function register(ctx) {
     const r = await ctx.dialog.showOpenDialog(ctx.win(), { title: 'Where it goes', properties: ['openDirectory', 'createDirectory'] })
     return r.canceled ? '' : take(r.filePaths)[0] || ''
   })
-  ctx.handle('archive-info', async () => ({ tar: !!tool.tar.bin, flavour: tool.tar.flavour, platform: process.platform }))
+  ctx.handle('archive-info', async () => ({ tar: !!tool.tar.bin, flavour: tool.tar.flavour, formats: tool.tar.formats || [], platform: process.platform }))
   // inside ctx.run: a Stop pressed earlier does not end this one, and a big tar.gz is read through
-  ctx.handle('archive-list', ({ path: p } = {}) => ctx.run(async () => { need(p); return tool.list(String(p), { stop: ctx.stopped }) }))
+  ctx.handle('archive-list', ({ path: p, password } = {}) => ctx.run(async () => { need(p); return tool.list(String(p), { stop: ctx.stopped, password: String(password || '') }) }))
+  ctx.handle('archive-test', ({ path: p, password } = {}, { emit }) => ctx.run(async () => { need(p); return tool.test(String(p), { password: String(password || ''), stop: ctx.stopped, tick: (v) => emit('archive-progress', v) }) }))
   ctx.handle('archive-extract', ({ path: p, dest, password } = {}, { emit }) => ctx.run(async () => {
     need(p); if (dest) need(dest)
     const r = await tool.extract(String(p), { dest: dest ? String(dest) : '', password: String(password || ''), stop: ctx.stopped, tick: (v) => emit('archive-progress', v) })
     if (r.folder) { allowed.add(r.folder); ctx.allow(r.folder) }
     return r
   }))
-  ctx.handle('archive-make', ({ items, format, level, junk, name, dest } = {}, { emit }) => ctx.run(async () => {
+  ctx.handle('archive-make', ({ items, format, level, junk, name, dest, password } = {}, { emit }) => ctx.run(async () => {
     const list = (Array.isArray(items) ? items : []).map(String)
     list.forEach(need); if (dest) need(dest)
-    const r = await tool.make(list, { format: String(format || 'zip'), level: String(level || 'normal'), junk: junk !== false, name: String(name || ''), dest: dest ? String(dest) : '', stop: ctx.stopped, tick: (v) => emit('archive-progress', v) })
+    const r = await tool.make(list, { format: String(format || 'zip'), level: String(level || 'normal'), junk: junk !== false, name: String(name || ''), dest: dest ? String(dest) : '', password: String(password || ''), stop: ctx.stopped, tick: (v) => emit('archive-progress', v) })
     ctx.allow(r.path)
     return r
   }))
 }
 
-module.exports = { register, makeTool, kindOf, baseOf, unsafe, isJunk, freeName, parseList, makeArgs, findTar, countItems, Stopped }
+module.exports = { register, makeTool, kindOf, baseOf, unsafe, linkOutside, unsafeEntries, unescapeName, plainPattern, isJunk, freeName, parseList, makeArgs, findTar, writable, friendly, countItems, Stopped }

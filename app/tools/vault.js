@@ -3,7 +3,11 @@
    moment or to copy it (the clipboard is cleared after 30 s). Locked again after a few idle minutes, when the computer
    sleeps or its screen locks, and when the window closes. In a browser, sample entries stand in (demo). */
 
-const V = { phase: 'loading', demo: false, list: [], q: '', tag: 'all', shown: {}, idle: 5, busy: false, hooked: false, asked: false }
+const V = { phase: 'loading', demo: false, list: [], q: '', tag: 'all', shown: {}, codes: {}, idle: 5, busy: false, hooked: false, asked: false }
+/* what is shown for a moment (a password, a two-factor code) goes when the person leaves the Vault, hides the window,
+   or the vault locks; the back button never brings a password back on the screen (audit, 29 Oct) */
+const hideAll = () => { for (const k of Object.keys(V.shown)) { clearTimeout(V.shown[k].timer); delete V.shown[k] } V.codes = {}; clearInterval(V.tick); V.tick = null }
+const HEALTH = { weak: ['Weak', 'var(--acc)'], reused: ['Reused', 'var(--warn)'], old: ['Old', 'var(--dim)'] }
 let C = null // the ctx of the last draw
 
 const TAGS = ['Clients', 'Gear', 'Socials', 'Banks', 'Studio', 'Software']
@@ -27,9 +31,28 @@ async function refresh() {
 function hook(ctx) {
   if (V.hooked) return
   V.hooked = true
-  ctx.on('vault-locked', () => { V.phase = 'locked'; V.list = []; V.shown = {}; if (ctx.S.mode === 'vault') ctx.draw() })
+  ctx.on('vault-locked', () => { V.phase = 'locked'; V.list = []; hideAll(); if (ctx.S.mode === 'vault') ctx.draw() })
+  document.addEventListener('visibilitychange', () => { if (document.hidden && (Object.keys(V.shown).length || Object.keys(V.codes).length)) { hideAll(); if (ctx.S.mode === 'vault') ctx.draw() } })
 }
-const lockNow = async () => { try { await C.call('vault-lock') } catch { /* it is locked */ } V.phase = 'locked'; V.list = []; V.shown = {}; C.draw() }
+const lockNow = async () => { try { await C.call('vault-lock') } catch { /* it is locked */ } V.phase = 'locked'; V.list = []; hideAll(); C.draw() }
+
+/* two-factor codes on the screen: refreshed every second from the Mac/Windows side while shown, gone after 2 minutes */
+function codeTick() {
+  if (V.tick) return
+  V.tick = setInterval(async () => {
+    const ids = Object.keys(V.codes)
+    if (!ids.length || V.phase !== 'open' || C?.S.mode !== 'vault') { hideAll(); return }
+    for (const id of ids) {
+      const c = V.codes[id]
+      if (Date.now() - c.since > 120e3) { delete V.codes[id]; continue }
+      c.left -= 1
+      if (c.left <= 0) { try { Object.assign(c, await C.call('vault-code', { id })) } catch { delete V.codes[id] } }
+    }
+    const el = document.querySelectorAll('.vt-code')
+    if (el.length === Object.keys(V.codes).length) el.forEach((x) => { const c = V.codes[x.dataset.id]; if (c) { x.querySelector('b').textContent = c.code.replace(/^(\d{3})(\d+)$/, '$1 $2'); x.style.setProperty('--f', String(c.left / c.period)); x.querySelector('small').textContent = c.left + 's' } })
+    else C.draw()
+  }, 1000)
+}
 
 /* a window of fields in the shared glass card */
 function win(ctx, title, kids, buttons) {
@@ -102,19 +125,24 @@ async function editEntry(ctx, e = {}) {
     password: pill(ctx, { type: 'password', value: '', placeholder: e.id ? t('Unchanged') : '' }),
     website: pill(ctx, { value: e.website || '', placeholder: 'https://vimeo.com' }),
     tag: pill(ctx, { value: e.tag || '', placeholder: t('Clients, Gear, Socials…'), list: 'vt-tags' }),
+    // the key a site gives for two-factor codes (or its otpauth:// link); kept as it is when left empty
+    totp: pill(ctx, { value: '', placeholder: e.hasTotp ? t('Kept as it is (type a new key to change it)') : t('The key the site shows next to its QR code') }),
     notes: h('textarea', { class: 'vt-in vt-notes', rows: '3' }, e.notes || ''),
   }
   const tags = h('datalist', { id: 'vt-tags' }, ...[...new Set([...TAGS, ...V.list.map((x) => x.tag).filter(Boolean)])].map((x) => h('option', { value: x })))
   const eye = h('button', { class: 'ib sm', type: 'button', title: t('Show'), html: EYE, onclick: () => { f.password.type = f.password.type === 'password' ? 'text' : 'password' } })
   const gen = h('button', { class: 'ib sm', type: 'button', title: t('Make one'), html: ctx.I.plus, onclick: async () => { f.password.value = await ctx.call('vault-generate', { length: 20 }); f.password.type = 'text'; f.password.dispatchEvent(new Event('input')) } })
   const pw = h('div', { class: 'vt-row' }, f.password, eye, gen)
+  let dropTotp = false
+  const totpRow = h('div', { class: 'vt-row' }, f.totp, e.hasTotp ? h('button', { class: 'ib sm', type: 'button', title: t('Remove the two-factor key'), 'aria-label': t('Remove the two-factor key'), html: ctx.I.x, onclick: (ev) => { dropTotp = true; f.totp.value = ''; f.totp.placeholder = t('Removed when you save'); ev.currentTarget.disabled = true } }) : null)
   const ok = await win(ctx, e.id ? t('Edit') : t('New entry'), [
     field(ctx, t('Name'), f.title), field(ctx, t('Username or email'), f.username), field(ctx, t('Password'), pw), meter(ctx, f.password),
-    field(ctx, t('Website'), f.website), field(ctx, t('Tag'), f.tag), tags, field(ctx, t('Notes'), f.notes)],
+    field(ctx, t('Website'), f.website), field(ctx, t('Two-factor key (optional)'), totpRow), field(ctx, t('Tag'), f.tag), tags, field(ctx, t('Notes'), f.notes)],
   [[t('Cancel'), false], [t('Save'), true, true]])
   if (!ok) return
   const entry = { id: e.id, title: f.title.value, username: f.username.value, website: f.website.value, tag: f.tag.value.trim(), notes: f.notes.value, fav: e.fav }
   if (f.password.value || !e.id) entry.password = f.password.value
+  if (f.totp.value.trim()) entry.totp = f.totp.value.trim(); else if (dropTotp) entry.totp = ''
   try { await ctx.call('vault-save', { entry }); V.list = await ctx.call('vault-list'); ctx.toast(t('Saved')) } catch (er) { ctx.toast(ctx.err(er)) }
   ctx.draw()
 }
@@ -138,7 +166,8 @@ async function generator(ctx) {
   const r = await win(ctx, t('Password generator'), [out, opts], [[t('Close'), false], [t('Make another'), 'again'], [t('Copy'), 'copy', true]])
   ctx.save('vault', 'gen', o)
   if (r === 'again') return generator(ctx)
-  if (r === 'copy') { try { await navigator.clipboard.writeText(out.textContent); ctx.toast(t('Copied')) } catch { ctx.toast(t('Could not copy')) } }
+  // through the Mac/Windows side, so a generated password too leaves the clipboard after 30 s
+  if (r === 'copy') { try { await ctx.call('vault-copy-text', { text: out.textContent }); ctx.toast(t('Password copied. It leaves the clipboard in 30 s.')) } catch { ctx.toast(t('Could not copy')) } }
 }
 async function changeMaster(ctx) {
   const { t } = ctx
@@ -157,15 +186,24 @@ function viewOpen(ctx) {
   const q = V.q.trim().toLowerCase()
   const tags = [...new Set(V.list.map((e) => e.tag).filter(Boolean))].sort()
   const list = V.list
-    .filter((e) => V.tag === 'all' || (V.tag === 'fav' ? e.fav : e.tag === V.tag))
+    .filter((e) => V.tag === 'all' || (V.tag === 'fav' ? e.fav : V.tag.startsWith('h:') ? (e.health || []).includes(V.tag.slice(2)) : e.tag === V.tag))
     .filter((e) => !q || [e.title, e.username, e.website, e.tag, e.notes].some((x) => String(x || '').toLowerCase().includes(q)))
     .sort((a, b) => (b.fav - a.fav) || a.title.localeCompare(b.title))
   const copy = async (e, field) => {
-    try { const r = await ctx.call('vault-copy', { id: e.id, field }); ctx.toast(field === 'password' ? (r.clears ? t('Password copied. It leaves the clipboard in 30 s.') : t('Password copied.')) : t('Copied')) } catch (er) { ctx.toast(ctx.err(er)) }
+    try { const r = await ctx.call('vault-copy', { id: e.id, field }); ctx.toast(field === 'password' ? (r.clears ? t('Password copied. It leaves the clipboard in 30 s.') : t('Password copied.')) : field === 'totp' ? t('Code copied. It leaves the clipboard in 30 s.') : t('Copied')) } catch (er) { ctx.toast(ctx.err(er)) }
   }
   const reveal = async (e) => {
-    if (V.shown[e.id] != null) { delete V.shown[e.id]; return ctx.draw() }
-    try { V.shown[e.id] = await ctx.call('vault-reveal', { id: e.id }); ctx.draw(); setTimeout(() => { delete V.shown[e.id]; if (ctx.S.mode === 'vault') ctx.draw() }, 20e3) } catch (er) { ctx.toast(ctx.err(er)) }
+    if (V.shown[e.id]) { clearTimeout(V.shown[e.id].timer); delete V.shown[e.id]; return ctx.draw() }
+    try {
+      const pw = await ctx.call('vault-reveal', { id: e.id })
+      // each shown password has its own 20 s, so hiding and showing again does not cut the new one short
+      V.shown[e.id] = { pw, timer: setTimeout(() => { delete V.shown[e.id]; if (ctx.S.mode === 'vault') ctx.draw() }, 20e3) }
+      ctx.draw()
+    } catch (er) { ctx.toast(ctx.err(er)) }
+  }
+  const code = async (e) => {
+    if (V.codes[e.id]) { delete V.codes[e.id]; return ctx.draw() }
+    try { V.codes[e.id] = { ...(await ctx.call('vault-code', { id: e.id })), since: Date.now() }; codeTick(); ctx.draw() } catch (er) { ctx.toast(ctx.err(er)) }
   }
   const star = async (e) => { try { await ctx.call('vault-save', { entry: { id: e.id, fav: !e.fav } }); V.list = await ctx.call('vault-list'); ctx.draw() } catch (er) { ctx.toast(ctx.err(er)) } }
   const del = async (e) => {
@@ -181,24 +219,31 @@ function viewOpen(ctx) {
       h('div', { class: 'f-meta' },
         e.tag ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' } }, h('i'), e.tag) : null,
         e.website ? h('span', { class: 'chip', title: e.website }, e.website.replace(/^https?:\/\//, '').replace(/\/$/, '').slice(0, 40)) : null,
-        V.shown[e.id] != null ? h('span', { class: 'chip vt-pw' }, V.shown[e.id] || t('(empty)')) : null)),
+        ...(e.health || []).map((k) => h('span', { class: 'chip tint', style: { '--c': HEALTH[k][1] }, title: t(HEALTH[k][0] + ' password') }, h('i'), t(HEALTH[k][0]))),
+        V.shown[e.id] ? h('span', { class: 'chip vt-pw' }, V.shown[e.id].pw || t('(empty)')) : null,
+        V.codes[e.id] ? h('button', { class: 'chip vt-code', 'data-id': e.id, style: { '--f': String(V.codes[e.id].left / V.codes[e.id].period) }, title: t('Copy the code'), onclick: () => copy(e, 'totp') },
+          h('b', {}, V.codes[e.id].code.replace(/^(\d{3})(\d+)$/, '$1 $2')), h('small', {}, V.codes[e.id].left + 's')) : null)),
     h('div', { class: 'f-act' },
       e.username ? h('button', { class: 'btn vt-sm', onclick: () => copy(e, 'username') }, t('Username')) : null,
       e.hasPassword ? h('button', { class: 'btn vt-sm vt-pwbtn', onclick: () => copy(e, 'password') }, t('Password')) : null,
-      e.hasPassword ? h('button', { class: 'ib sm', title: V.shown[e.id] != null ? t('Hide') : t('Show'), 'aria-label': t('Show'), html: V.shown[e.id] != null ? ctx.I.x : EYE, onclick: () => reveal(e) }) : null,
+      e.hasPassword ? h('button', { class: 'ib sm', title: V.shown[e.id] ? t('Hide') : t('Show'), 'aria-label': V.shown[e.id] ? t('Hide') : t('Show'), html: V.shown[e.id] ? ctx.I.x : EYE, onclick: () => reveal(e) }) : null,
+      e.hasTotp ? h('button', { class: 'btn vt-sm' + (V.codes[e.id] ? ' on' : ''), title: t('The two-factor code'), onclick: () => code(e) }, '2FA') : null,
       h('button', { class: 'ib sm', title: t('Edit'), 'aria-label': t('Edit'), html: ctx.I.rename, onclick: () => editEntry(ctx, e) }),
       h('button', { class: 'ib sm vt-del', title: t('Delete'), 'aria-label': t('Delete'), html: ctx.I.trash, onclick: () => del(e) })))
   const imp = async () => {
     try {
       const r = await ctx.call('vault-import')
       if (!r?.added && r?.file === undefined) return
+      if (!r.added && r.already) return ctx.toast(t('Everything in {f} is in the vault already.', { f: r.file }))
       V.list = await ctx.call('vault-list'); ctx.draw()
-      await ctx.sheet(t('{n} passwords brought in', { n: ctx.num(r.added || 0) }), t('Now delete the CSV file ({f}) and empty the Trash: it holds every password as plain text.', { f: r.file || '' }), [[t('OK'), true, true]])
+      await ctx.sheet(t('{n} passwords brought in', { n: ctx.num(r.added || 0) }) + (r.already ? ' · ' + t('{n} were there already', { n: ctx.num(r.already) }) : ''), t('Now delete the CSV file ({f}) and empty the Trash: it holds every password as plain text.', { f: r.file || '' }), [[t('OK'), true, true]])
     } catch (e) { ctx.toast(ctx.err(e)) }
   }
   const exp = async () => { try { const p = await ctx.call('vault-export'); if (p) ctx.toast(t('Backup saved. It opens with the same master password.')) } catch (e) { ctx.toast(ctx.err(e)) } }
   return h('main', {}, h('div', { class: 'res vt' },
     h('div', { class: 'sum' }, ctx.seg([['all', t('All'), V.list.length], ['fav', '★', V.list.filter((e) => e.fav).length || null], ...tags.map((x) => [x, x, V.list.filter((e) => e.tag === x).length])], V.tag, (v) => { V.tag = v; ctx.draw() }),
+      // password health (weak, reused, old): a chip each, a click shows only those
+      ...Object.entries(HEALTH).map(([k, [label, c]]) => { const n = V.list.filter((e) => (e.health || []).includes(k)).length; return n ? h('button', { class: 'chip tint vt-hchip' + (V.tag === 'h:' + k ? ' on' : ''), style: { '--c': c }, title: t('Show only these'), onclick: () => { V.tag = V.tag === 'h:' + k ? 'all' : 'h:' + k; ctx.draw() } }, h('i'), t(label) + ' · ' + n) : null }),
       V.demo ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' } }, h('i'), t('Demo: sample entries, nothing is saved.')) : null),
     list.length ? h('div', { class: 'vt-list' }, ...list.map(tile))
       : h('div', { class: 'empty vt-empty' }, h('div', {}, h('div', { class: 'big-i', html: ctx.I.lock }),
@@ -219,12 +264,14 @@ const EYE = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-w
 
 /* ---------- the sample, in a browser ---------- */
 const demoState = { exists: true, unlocked: false, master: 'demo-demo', entries: [
-  { id: 'd1', title: 'Vimeo', username: 'studio@themadlions.com', password: 'Vx7-qK2m-Lp9w-Rz4t', website: 'https://vimeo.com', tag: 'Socials', notes: 'Pro plan, renews in March', fav: true },
+  { id: 'd1', title: 'Vimeo', username: 'studio@themadlions.com', password: 'Vx7-qK2m-Lp9w-Rz4t', website: 'https://vimeo.com', tag: 'Socials', notes: 'Pro plan, renews in March', fav: true, totp: 'JBSWY3DPEHPK3PXP' },
   { id: 'd2', title: 'Frame.io', username: 'alex@themadlions.com', password: 'fr4M3!review#2026', website: 'https://app.frame.io', tag: 'Clients', notes: '', fav: true },
   { id: 'd3', title: 'Panic Records FTP', username: 'tml_upload', password: 'P@nic-ftp-88', website: 'sftp://ftp.panicrecords.gr', tag: 'Clients', notes: 'Masters go to /incoming' },
   { id: 'd4', title: 'RED account', username: 'alex@themadlions.com', password: 'Komodo-6K-!x', website: 'https://www.red.com', tag: 'Gear', notes: '' },
   { id: 'd5', title: 'Instagram', username: '@themadlions', password: 'Ro@r-insta-55', website: 'https://instagram.com', tag: 'Socials', notes: '' },
   { id: 'd6', title: 'Studio Wi-Fi', username: 'TML-5G', password: 'lions-den-2026', website: '', tag: 'Studio', notes: 'Guest network: TML-Guest' },
+  { id: 'd7', title: 'Office router', username: 'admin', password: 'lions-den-2026', website: 'http://192.168.1.1', tag: 'Studio', notes: '', old: true },
+  { id: 'd8', title: 'Old Dropbox', username: 'alex@themadlions.com', password: 'dropbox1', website: 'https://dropbox.com', tag: 'Software', notes: '' },
 ] }
 const words = 'amber anchor cedar comet copper crimson ember falcon garnet harbor indigo lantern meadow nova orbit pearl prism quartz raven saffron'.split(' ')
 const rnd = (n) => Math.floor(Math.random() * n)
@@ -233,7 +280,8 @@ const genDemo = (o = {}) => {
   const set = 'abcdefghijkmnpqrstuvwxyz' + (o.upper !== false ? 'ABCDEFGHJKLMNPQRSTUVWXYZ' : '') + (o.digits !== false ? '23456789' : '') + (o.symbols !== false ? '!@#$%^&*-_=+?' : '')
   return Array.from({ length: Math.max(12, Math.min(64, o.length || 20)) }, () => set[rnd(set.length)]).join('')
 }
-const pub = (e) => ({ id: e.id, title: e.title, username: e.username, website: e.website, notes: e.notes, tag: e.tag, fav: !!e.fav, hasPassword: !!e.password })
+const pub = (e) => ({ id: e.id, title: e.title, username: e.username, website: e.website, notes: e.notes, tag: e.tag, fav: !!e.fav, hasPassword: !!e.password, hasTotp: !!e.totp,
+  health: [e.password && e.password.length < 10 && 'weak', e.password && demoState.entries.filter((x) => x.password === e.password).length > 1 && 'reused', e.old && 'old'].filter(Boolean) })
 const need = () => { if (!demoState.unlocked) throw new Error('The vault is locked.') }
 const demo = {
   'vault-state': async () => ({ demo: true, exists: demoState.exists, unlocked: demoState.unlocked, idle: 5, count: demoState.entries.length }),
@@ -253,9 +301,12 @@ const demo = {
   'vault-reveal': async ({ id }) => { need(); return demoState.entries.find((x) => x.id === id)?.password || '' },
   'vault-copy': async () => { need(); return { ok: true, clears: true } },
   'vault-generate': async (o) => genDemo(o),
+  'vault-copy-text': async () => ({ ok: true, clears: true }),
+  'vault-code': async () => { need(); const s = Math.floor(Date.now() / 1000); return { code: String((s / 30 | 0) * 7919 % 1e6).padStart(6, '0'), left: 30 - (s % 30), period: 30 } },
+  'vault-totp-key': async ({ id }) => demoState.entries.find((x) => x.id === id)?.totp || '',
   'vault-change': async ({ old, password }) => { if (old !== demoState.master) throw new Error('Wrong password'); demoState.master = password; return { ok: true } },
   'vault-export': async () => '/Users/alex/Desktop/Vault backup.roarvault',
-  'vault-import': async () => { need(); demoState.entries.push({ id: 'i' + Date.now(), title: 'Gmail', username: 'alex@gmail.com', password: 'imported-1', website: 'https://accounts.google.com', tag: '', notes: '' }); return { added: 1, file: 'Chrome Passwords.csv' } },
+  'vault-import': async () => { need(); demoState.entries.push({ id: 'i' + Date.now(), title: 'Gmail', username: 'alex@gmail.com', password: 'imported-1', website: 'https://accounts.google.com', tag: '', notes: '' }); return { added: 1, already: 3, file: 'Chrome Passwords.csv' } },
 }
 
 export default {
@@ -263,9 +314,12 @@ export default {
   view(ctx) {
     C = ctx
     hook(ctx)
+    // the page that is still on the screen is another tool's: coming back hides what was shown before
+    if (!document.querySelector('main.vt-page')) hideAll()
     if (!V.asked) { V.asked = true; V.idle = ctx.load('vault', 'idle', 5); refresh() }
-    if (V.phase === 'loading') return ctx.h('main', {}, ctx.h('div', { class: 'home' }))
-    return V.phase === 'new' ? viewNew(ctx) : V.phase === 'locked' ? viewLocked(ctx) : viewOpen(ctx)
+    const m = V.phase === 'loading' ? ctx.h('main', {}, ctx.h('div', { class: 'home' })) : V.phase === 'new' ? viewNew(ctx) : V.phase === 'locked' ? viewLocked(ctx) : viewOpen(ctx)
+    m.classList.add('vt-page')
+    return m
   },
   top(ctx) {
     const { h, t } = ctx
@@ -307,6 +361,13 @@ export default {
     'Bring in passwords': 'Φέρε κωδικούς', 'A CSV exported from Chrome, Safari, Firefox, 1Password or Bitwarden.': 'Ένα CSV από Chrome, Safari, Firefox, 1Password ή Bitwarden.',
     'Import CSV…': 'Εισαγωγή CSV…', 'Backup': 'Backup', 'A sealed copy of the vault, for another drive. It opens with the same master password.': 'Ένα σφραγισμένο αντίγραφο του vault, για άλλον δίσκο. Ανοίγει με τον ίδιο κύριο κωδικό.',
     'Save a backup…': 'Αποθήκευση backup…', 'Every password is sealed again with the new one.': 'Όλοι οι κωδικοί σφραγίζονται ξανά με τον καινούργιο.',
+    'Not a vault file.': 'Δεν είναι αρχείο vault.', 'This vault was made by a newer version.': 'Αυτό το vault φτιάχτηκε από νεότερη έκδοση.',
+    'Two-factor key (optional)': 'Κλειδί δύο βημάτων (προαιρετικό)', 'The key the site shows next to its QR code': 'Το κλειδί που δείχνει το site δίπλα στο QR code',
+    'Kept as it is (type a new key to change it)': 'Μένει όπως είναι (γράψε νέο κλειδί για να αλλάξει)', 'Remove the two-factor key': 'Αφαίρεση κλειδιού δύο βημάτων', 'Removed when you save': 'Αφαιρείται όταν αποθηκεύσεις',
+    'That two-factor key is not a valid one.': 'Αυτό το κλειδί δύο βημάτων δεν είναι σωστό.', 'No two-factor key.': 'Δεν υπάρχει κλειδί δύο βημάτων.',
+    'The two-factor code': 'Ο κωδικός δύο βημάτων', 'Copy the code': 'Αντιγραφή του κωδικού', 'Code copied. It leaves the clipboard in 30 s.': 'Ο κωδικός αντιγράφηκε. Φεύγει από το clipboard σε 30 δευτ.',
+    'Reused': 'Ίδιος αλλού', 'Old': 'Παλιός', 'Weak password': 'Αδύναμος κωδικός', 'Reused password': 'Ο ίδιος κωδικός και σε άλλη καταχώρηση', 'Old password': 'Δεν έχει αλλάξει πάνω από χρόνο',
+    'Show only these': 'Δείξε μόνο αυτά', 'Everything in {f} is in the vault already.': 'Όλα όσα έχει το {f} είναι ήδη στο vault.', '{n} were there already': '{n} υπήρχαν ήδη',
     'Search': 'Αναζήτηση', 'Generator': 'Γεννήτρια', 'New': 'Νέο', 'Lock': 'Κλείδωμα', 'Kind': 'Είδος', 'Length': 'Μήκος', 'All': 'Όλα', 'Cancel': 'Άκυρο', 'Name': 'Όνομα',
   },
 }

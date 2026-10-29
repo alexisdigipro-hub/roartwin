@@ -3,14 +3,16 @@
 // untouched for a while are offered; chosen whole folders go to the Trash. Doors: leftovers-scan, leftovers-trash,
 // leftovers-export (electron/tools/leftovers.js).
 const APP = { Resolve: '#ff6b2c', Premiere: '#bf5af2', 'After Effects': '#5e9bff', 'Final Cut': '#64d2ff' }
-const st = { roots: null, months: null, res: null, busy: false, prog: null, sel: new Map(), gone: new Set() }
+const st = { roots: null, months: null, res: null, busy: false, prog: null, sel: new Map(), gone: new Set(), app: 'all' }
 let lastDraw = 0
 function init(ctx) {
   if (st.roots == null) { st.roots = ctx.load('leftovers', 'roots', []); st.months = ctx.load('leftovers', 'months', 3) }
 }
 const save = (ctx) => { ctx.save('leftovers', 'roots', st.roots); ctx.save('leftovers', 'months', st.months) }
 const cut = () => Date.now() - st.months * 30.44 * 864e5
-const live = () => (st.res?.items || []).filter((i) => !st.gone.has(i.path))
+// what is shown: not what went, and only the chosen program's (Alex, 29 Oct: a filter per program)
+const all = () => (st.res?.items || []).filter((i) => !st.gone.has(i.path))
+const live = () => all().filter((i) => st.app === 'all' || i.app === st.app)
 const offered = () => live().filter((i) => i.newest < cut())
 const pickedSize = () => [...st.sel.values()].reduce((n, i) => n + i.size, 0)
 
@@ -22,7 +24,7 @@ async function scan(ctx) {
   try {
     const r = await ctx.call('leftovers-scan', { roots: st.roots, skipHidden: ctx.S.opts.skipHidden, protect: ctx.S.protect })
     if (r?.stopped) ctx.toast(ctx.t('Stopped.'))
-    else { st.res = r; for (const i of offered()) if (!i.protected) st.sel.set(i.path, i) }
+    else { st.res = r; st.app = 'all'; for (const i of offered()) if (!i.protected) st.sel.set(i.path, i) }
   } catch (e) { ctx.toast(ctx.err(e)) } finally { off?.(); st.busy = false; ctx.busy(false) }
 }
 async function toTrash(ctx) {
@@ -42,7 +44,7 @@ async function toTrash(ctx) {
 async function exportCsv(ctx) {
   const { t } = ctx
   const q = (s) => `"${String(s ?? '').replace(/"/g, '""')}"`
-  const rows = [[t('Program'), t('What'), t('Project'), t('Folder'), t('Size (bytes)'), t('Files'), t('Last changed')], ...live().map((i) => [i.app, t(i.what), i.project, i.path, i.size, i.files, new Date(i.newest).toISOString().slice(0, 10)])]
+  const rows = [[t('Program'), t('What'), t('Project'), t('Folder'), t('Size (bytes)'), t('Files'), t('Last changed')], ...all().map((i) => [i.app, t(i.what), i.project, i.path, i.size, i.files, new Date(i.newest).toISOString().slice(0, 10)])]
   try { if (await ctx.call('leftovers-export', { text: rows.map((r) => r.map(q).join(',')).join('\r\n'), name: 'Project leftovers.csv' })) ctx.toast(t('List saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 
@@ -65,7 +67,14 @@ function itemRow(ctx, i, recent) {
 
 function viewResult(ctx) {
   const { h, t, bytes, plural, seg, dur } = ctx
-  const all = live(), old = offered(), recent = all.filter((i) => !old.includes(i))
+  const everything = all(), shown = live(), old = offered(), recent = shown.filter((i) => !old.includes(i))
+  // one chip a program found, with how many; the chosen one as tinted
+  const apps = [...new Set(everything.map((i) => i.app))]
+  const filter = apps.length > 1 ? h('div', { class: 'sp-quicks' },
+    h('button', { class: 'chip sp-quick' + (st.app === 'all' ? ' tint' : ''), onclick: () => { st.app = 'all'; ctx.draw() } }, t('All') + ' · ' + everything.length),
+    ...apps.map((a) => h('button', { class: 'chip sp-quick' + (st.app === a ? ' tint' : ''), style: { '--c': APP[a] || 'var(--acc)' }, onclick: () => { st.app = a; ctx.draw() } }, h('i'), a + ' · ' + everything.filter((i) => i.app === a).length))) : null
+  const choosable = old.filter((i) => !i.protected)
+  const allOn = choosable.length && choosable.every((i) => st.sel.has(i.path))
   // what may go: not what sits in a Masters folder
   const free = old.filter((i) => !i.protected)
   const oldSize = free.reduce((n, i) => n + i.size, 0)
@@ -73,7 +82,7 @@ function viewResult(ctx) {
   const foot = st.sel.size ? h('div', { class: 'foot show sp-foot' }, h('span', {}, h('b', {}, plural(st.sel.size, 'folder')), ' · ', h('b', {}, bytes(pickedSize()))),
     h('button', { class: 'btn', onclick: () => { st.sel.clear(); ctx.draw() } }, t('Clear')),
     h('button', { class: 'btn main', onclick: () => toTrash(ctx) }, ctx.ico('trash'), t('Move to Trash'))) : null
-  if (!all.length) {
+  if (!everything.length) {
     return h('main', {}, h('div', { class: 'empty' }, h('div', {}, h('div', { class: 'big-i', html: ctx.I.done }),
       h('h2', { html: st.gone.size ? t('All <b>tidy</b>.') : t('No <b>leftovers</b> here.') }),
       h('p', {}, t('Looked in {n} in {t}.', { n: plural(st.res.roots.length, 'folder'), t: dur(st.res.took / 1000) })))))
@@ -85,7 +94,8 @@ function viewResult(ctx) {
       h('span', { class: 'chip tint' }, h('i'), t('{n} to free in {f}', { n: bytes(oldSize), f: plural(free.length, 'folder') })),
       recent.length ? h('span', { class: 'chip' }, t('{n} still in use, left out', { n: plural(recent.length, 'folder') })) : null,
       h('span', { class: 'chip' }, t('in {t}', { t: dur(st.res.took / 1000) })),
-      old.length ? h('button', { class: 'btn', style: { height: '28px', padding: '0 12px', fontSize: '12.5px' }, onclick: () => { for (const i of old) if (!i.protected) st.sel.set(i.path, i); ctx.draw() } }, t('Choose all')) : null),
+      choosable.length ? h('button', { class: 'btn', style: { height: '28px', padding: '0 12px', fontSize: '12.5px' }, onclick: () => { for (const i of choosable) allOn ? st.sel.delete(i.path) : st.sel.set(i.path, i); ctx.draw() } }, allOn ? t('Choose none') : t('Choose all')) : null),
+    filter,
     old.length ? h('section', { class: 'group sp-list' }, ...old.map((i) => itemRow(ctx, i))) : h('p', { class: 'note' }, t('Everything here changed recently.')),
     recent.length ? h('section', { class: 'group sp-list' }, h('div', { class: 'sp-head' }, h('b', {}, t('Changed recently')), h('small', {}, t('Probably still being edited.'))),
       ...recent.map((i) => itemRow(ctx, i, true))) : null), foot)
@@ -122,7 +132,7 @@ function viewStart(ctx) {
 
 export default {
   // back and forward (app.js): what makes this tool's screen
-  nav: { get: () => ({ res: st.res }), set: (s) => { st.res = s.res } },
+  nav: { get: () => ({ res: st.res }), set: (s) => { if (s.res !== st.res) { st.sel.clear(); st.app = 'all' } st.res = s.res } },
   id: 'leftovers',
   el: {
     'What finished <b>projects</b> left behind.': 'Τι άφησαν πίσω τα <b>projects</b> που τελείωσαν.',
@@ -137,7 +147,7 @@ export default {
     '1 month': '1 μήνα', '3 months': '3 μήνες', '6 months': '6 μήνες', '1 year': '1 χρόνο',
     '{n} to free in {f}': '{n} για ελευθέρωση σε {f}',
     '{n} still in use, left out': '{n} σε χρήση ακόμα, έμειναν έξω',
-    'Choose all': 'Διάλεξε όλα',
+    'Choose all': 'Διάλεξε όλα', 'Choose none': 'Κανένα', 'All': 'Όλα',
     'Everything here changed recently.': 'Όλα εδώ άλλαξαν πρόσφατα.',
     'Changed recently': 'Άλλαξαν πρόσφατα', 'Probably still being edited.': 'Μάλλον γίνεται ακόμα μοντάζ.',
     'No <b>leftovers</b> here.': 'Δεν υπάρχουν <b>υπόλοιπα</b> εδώ.',
