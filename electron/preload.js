@@ -29,6 +29,8 @@ contextBridge.exposeInMainWorld('twin', {
   // the other tools (electron/tools/*.js): one door each, by name ('space-scan', 'report-save'…); events the same way
   tool: (name, args) => ipcRenderer.invoke('tool:' + String(name), args ?? null),
   onTool: (name, fn) => on('tool:' + String(name))(fn),
+  // Settings the Mac/Windows side needs (Alex, 28 Oct): the look of its own windows, the end-of-job notification, the company for the MHL
+  prefs: (v) => ipcRenderer.invoke('twin:prefs', v),
   update: {
     state: () => ipcRenderer.invoke('twin:update-state'),
     check: () => ipcRenderer.invoke('twin:update-check'),

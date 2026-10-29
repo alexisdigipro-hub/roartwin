@@ -2,7 +2,7 @@
 // The page (app/) asks; this side walks the disk, runs the engine (engine.js, with the ffmpeg that comes inside
 // the app) and moves what the person chose to the computer's Trash. Nothing is ever deleted for good, and a group
 // always keeps at least one of its files.
-const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, net, protocol, shell, powerSaveBlocker } = require('electron')
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeTheme, net, protocol, shell, powerSaveBlocker } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const { pathToFileURL } = require('url')
@@ -119,6 +119,7 @@ ipcMain.handle('twin:scan', async (e, opts) => {
       folders: opts.folders !== false, parts: !!opts.parts, photos: opts.photos !== false, sounds: opts.sounds !== false, proxies: opts.proxies !== false,
     }, tick, () => stopNow)
     last = r
+    jobDone('scan')
     return r
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -140,6 +141,7 @@ ipcMain.handle('twin:copy', async (e, opts) => {
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
     lastCopy = await engine.makeTwin({ source: String(opts.source), targets, folder: String(opts.folder || ''), skipHidden: opts.skipHidden !== false, version: app.getVersion() }, tick, () => stopNow)
+    jobDone('copy')
     return lastCopy
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -157,6 +159,7 @@ ipcMain.handle('twin:recheck', async (e, opts) => {
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
     lastBackup = await engine.recheck({ folder: String(opts.folder) }, tick, () => stopNow)
+    jobDone('backup')
     return lastBackup
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -188,6 +191,7 @@ ipcMain.handle('twin:backup', async (e, opts) => {
   const tick = (t) => { const now = Date.now(); if (now - lastTick > 120 || t.done === t.total) { lastTick = now; try { e.sender.send('twin:progress', t) } catch { /* window gone */ } } }
   try {
     lastBackup = await engine.backupCheck({ source: String(opts.source), backup: String(opts.backup), skipHidden: opts.skipHidden !== false, skipCloud: opts.skipCloud !== false }, tick, () => stopNow)
+    jobDone('backup')
     return lastBackup
   } catch (err) {
     if (err instanceof engine.Stopped) return { stopped: true }
@@ -261,6 +265,7 @@ ipcMain.handle('twin:clean', async (_e, ids) => {
       }
     }
   } finally { scanning = false }
+  jobDone('clean')
   return { ok: ok.length, freed, failed }
 })
 
@@ -274,13 +279,14 @@ const ctx = {
   win: () => win,
   allow: (...ps) => ps.flat().forEach((p) => p && shown.add(String(p))),
   stopped: () => stopNow,
+  prefs: () => ({ ...prefs }),
   handle: (name, fn) => ipcMain.handle('tool:' + name, async (e, args) => fn(args ?? {}, { emit: (ev, v) => { try { e.sender.send('tool:' + ev, v) } catch { /* window gone */ } } })),
   /* a long job: the lock, the computer kept awake, Stop turned into { stopped: true } */
   async run(fn) {
     if (scanning) throw new Error('A scan is already running.')
     scanning = true; stopNow = false
     const awake = powerSaveBlocker.start('prevent-app-suspension')
-    try { return await fn() } catch (err) {
+    try { const r = await fn(); if (!r?.stopped) jobDone(); return r } catch (err) {
       if (err instanceof engine.Stopped || err?.name === 'Stopped' || err?.message === 'Stopped') return { stopped: true }
       throw err
     } finally { scanning = false; powerSaveBlocker.stop(awake) }
@@ -326,6 +332,31 @@ ipcMain.handle('twin:export', async (_e, text) => {
   return true
 })
 ipcMain.handle('twin:version', () => app.getVersion())
+/* Settings (Alex, 28 Oct): the look of the app's own windows, menus and scroll bars, and the end-of-job notification */
+const prefs = { lang: 'en', theme: 'dark', notify: true, sound: false, company: '', companyLine: '' }
+ipcMain.handle('twin:prefs', (_e, v) => {
+  Object.assign(prefs, Object.fromEntries(Object.entries(v || {}).filter(([k]) => k in prefs)))
+  nativeTheme.themeSource = prefs.theme === 'auto' ? 'system' : prefs.theme === 'light' ? 'light' : 'dark'
+  const light = !nativeTheme.shouldUseDarkColors
+  try {
+    win?.setBackgroundColor(light ? '#f3f4f7' : '#16181d')
+    if (process.platform === 'win32') win?.setTitleBarOverlay({ color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 })
+  } catch { /* an older window */ }
+  return true
+})
+/* a long job ended while the person was in another app: say so (Settings > When a job ends) */
+const DONE = {
+  en: { scan: 'The twins are found.', copy: 'The card is copied and checked.', backup: 'The backup check is done.', clean: 'Clean up is done.', job: 'The job is done.' },
+  el: { scan: 'Βρέθηκαν τα διπλά.', copy: 'Η κάρτα αντιγράφηκε και ελέγχθηκε.', backup: 'Ο έλεγχος του backup τελείωσε.', clean: 'Το καθάρισμα τελείωσε.', job: 'Η δουλειά τελείωσε.' },
+}
+function jobDone(kind = 'job') {
+  if (!prefs.notify || !win || win.isFocused()) return
+  try {
+    if (Notification.isSupported()) new Notification({ title: 'RoarKit', body: (DONE[prefs.lang] || DONE.en)[kind] || DONE.en.job, silent: !prefs.sound }).show()
+    if (process.platform === 'darwin') app.dock?.bounce('informational')
+    else win.flashFrame(true)
+  } catch { /* no notifications here */ }
+}
 ipcMain.handle('twin:has-ffmpeg', () => { const p = ffmpegPath(); return !!p && fs.existsSync(p) })
 
 if (!app.requestSingleInstanceLock()) app.quit()
