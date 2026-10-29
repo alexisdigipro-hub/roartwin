@@ -1,4 +1,4 @@
-// RoarTwin for Mac and Windows (The Mad Lions Lab, Oct 2026): give it folders or drives, it finds the twins.
+// RoarKit (RoarTwin until 28 Oct) for Mac and Windows (The Mad Lions Lab, Oct 2026): a utility of many tools for film people.
 // The page (app/) asks; this side walks the disk, runs the engine (engine.js, with the ffmpeg that comes inside
 // the app) and moves what the person chose to the computer's Trash. Nothing is ever deleted for good, and a group
 // always keeps at least one of its files.
@@ -340,7 +340,7 @@ ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemI
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)
 ipcMain.handle('twin:export', async (_e, text) => {
-  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: 'RoarTwin duplicates.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] })
+  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: 'RoarKit duplicates.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] })
   if (canceled || !filePath) return false
   fs.writeFileSync(filePath, '﻿' + String(text), 'utf8')
   shell.showItemInFolder(filePath)
@@ -380,7 +380,7 @@ ipcMain.handle('twin:has-ffmpeg', () => { const p = ffmpegPath(); return !!p && 
 
 if (!app.requestSingleInstanceLock()) app.quit()
 app.on('second-instance', () => { if (win) { if (win.isMinimized()) win.restore(); win.focus() } })
-/* RoarTwin can update itself only where it may replace itself: in Applications, not opened straight from the .dmg
+/* RoarKit can update itself only where it may replace itself: in Applications, not opened straight from the .dmg
    or from Downloads (macOS runs those from a hidden read-only copy). There the update used to open the new .dmg
    instead, so it had to be installed by hand every time (Alex, 24 Oct: "make it update by itself"). Started from
    anywhere else, it offers to move itself to Applications once per start; Electron moves it and opens it again. */

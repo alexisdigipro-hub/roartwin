@@ -21,9 +21,12 @@ A utility of many tools for film people, Mac and Windows (The Mad Lions Lab). A 
 - **Private:** Vault (passwords, AES-256-GCM with a scrypt key from one master password, only on this computer, locks
   itself, copies clear the clipboard after 30 s, generator, encrypted backup, import from browsers' CSV).
 
-The name: on screen RoarKit since 0.3.0; the app file is still RoarTwin.app for one release, because the 0.1.x updater
-only takes an app of that name. 0.3.0's updater takes any name, so the next release can be RoarKit.app (set productName,
-artifactName and the workflow's names then). Settings stay in the RoarTwin folder (main.js setPath) whatever the name.
+The name: on screen RoarKit since 0.3.0; the app file is RoarKit.app since 0.4.2 (productName, artifactName and the
+workflow's names; 0.3.0's updater takes any name and puts RoarKit.app in place of RoarTwin.app). Kept as RoarTwin on
+purpose, so nothing installed or saved breaks: the bundle id com.themadlions.roartwin, the settings folder (main.js
+setPath), the repository (updater REPO), the copy reports' file names (`_RoarTwin copy report …csv`, read back by
+Check a backup and Drive health), the hidden work files (.roartwin-part and the like), and the RoarTwin-*.dmg/exe
+copies on each release for old download links.
 
 **Back and forward** (0.3.1): ← → at the start of the top row, Cmd+[ / Cmd+] (Alt+← / Alt+→ on Windows), a trackpad
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
@@ -83,7 +86,7 @@ file (exported again, in another size, codec or container). Mac and Windows. An 
   drive and its SHA-256 checked against the card's. Nothing is written over (a file already there with the same bytes
   counts as copied; one with other bytes is reported and left alone), nothing is deleted, there must be room first,
   and each copy gets `_RoarTwin copy report <date>.csv` (every file, size, SHA-256, result).
-- **A card put in** (Make a twin, a switch, on by default): RoarTwin looks at the drives every few seconds; a new one
+- **A card put in** (Make a twin, a switch, on by default): RoarKit looks at the drives every few seconds; a new one
   that holds camera clips (DCIM, PRIVATE/M4ROOT, XDROOT, CLIP, CONTENTS, AVCHD, a RED .RDM, clips at its top) brings a
   question: copy it to the chosen drives and check every copy? Cards put in during a copy wait their turn and go on by
   themselves.

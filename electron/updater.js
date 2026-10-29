@@ -1,8 +1,8 @@
 // RoarKit (RoarTwin until 28 Oct) updates itself, like the other Roar apps (no paid Apple certificate, so not Electron's own updater).
 // It looks at the newest GitHub release itself, downloads the right installer in the background, and when it
 // is ready the page shows "Restart to update". Restarting (or simply quitting) swaps the app for the new one:
-// on a Mac a small script waits for RoarTwin to close, copies the new RoarTwin.app over the old one and opens it; on
-// Windows the installer runs silently and opens RoarTwin again. If the app cannot be replaced where it sits (a
+// on a Mac a small script waits for RoarKit to close, copies the new app over the old one and opens it; on
+// Windows the installer runs silently and opens RoarKit again. If the app cannot be replaced where it sits (a
 // folder it may not write to), the downloaded installer is opened instead, as before.
 const { app, BrowserWindow, Notification, net, shell } = require('electron')
 const { spawn } = require('child_process')
@@ -43,7 +43,7 @@ async function check() {
   busy = true
   try {
     send({ status: 'checking', error: '' })
-    const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'RoarTwin' } })
+    const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'RoarKit' } })
     if (!r.ok) throw new Error(`GitHub ${r.status}`)
     const d = await r.json()
     const version = (String(d.name || '').match(/(\d+\.\d+\.\d+)/) || [])[1] || ''
@@ -56,7 +56,7 @@ async function check() {
     const target = path.join(dir(), asset.name.includes(version) ? asset.name : `${version}-${asset.name}`)
     if (!(fs.existsSync(target) && fs.statSync(target).size === asset.size)) {
       send({ status: 'downloading', version, progress: 0 })
-      const res = await net.fetch(asset.browser_download_url, { headers: { 'User-Agent': 'RoarTwin' } })
+      const res = await net.fetch(asset.browser_download_url, { headers: { 'User-Agent': 'RoarKit' } })
       if (!res.ok || !res.body) throw new Error(`download ${res.status}`)
       const total = Number(res.headers.get('content-length')) || asset.size || 0
       const part = `${target}.part`
@@ -91,7 +91,7 @@ async function check() {
   return state
 }
 
-// where this RoarTwin.app lives (…/RoarTwin.app/Contents/MacOS/RoarTwin)
+// where this app lives (…/RoarKit.app/Contents/MacOS/RoarKit)
 const macBundle = () => path.resolve(path.dirname(process.execPath), '..', '..')
 const canReplace = (bundle) => {
   if (!/\.app$/.test(bundle) || bundle.includes('/Volumes/') || bundle.includes('AppTranslocation')) return false
@@ -114,7 +114,7 @@ function install(relaunch) {
   return true
 }
 
-// waits for RoarTwin to close, puts the new RoarTwin.app in place of the old (the old stays if anything fails), opens it
+// waits for RoarKit to close, puts the new RoarKit.app in place of the old (the old stays if anything fails), opens it
 const MAC_SWAP = `#!/bin/bash
 PID="$1"; DMG="$2"; APP="$3"; RELAUNCH="$4"
 for i in $(seq 1 100); do kill -0 "$PID" 2>/dev/null || break; sleep 0.2; done

@@ -1,4 +1,4 @@
-// What RoarTwin's page may ask of the Mac/Windows app: folders, a scan, the Trash, Finder/Explorer, updates, Clean up.
+// What RoarKit's page may ask of the Mac/Windows app: folders, a scan, the Trash, Finder/Explorer, updates, Clean up.
 const { contextBridge, ipcRenderer, webUtils } = require('electron')
 
 const on = (channel) => (fn) => { const h = (_e, v) => fn(v); ipcRenderer.on(channel, h); return () => ipcRenderer.removeListener(channel, h) }

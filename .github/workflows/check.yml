@@ -1,4 +1,4 @@
-name: Check RoarTwin
+name: Check RoarKit
 
 # Every push and pull request: the scripts parse, and the engine finds the right twins among real videos
 # (made with ffmpeg: a copy, a re-encode, the same name with another picture, black clips) and texts.

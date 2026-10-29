@@ -1,4 +1,4 @@
-// RoarTwin's engine (The Mad Lions Lab, Oct 2026): finds twins in the folders and drives it is given.
+// RoarKit's engine (The Mad Lions Lab, Oct 2026): finds twins in the folders and drives it is given.
 // 1. Exact copies, of any file: the same size, then the same bytes at the start, middle and end, then the same
 //    SHA-256 of the whole file. The name plays no part, so a copy renamed is still found, and two files that only
 //    share a name are never taken for twins.
@@ -772,7 +772,7 @@ function mhlOf(rows, version = '') {
   const now = isoS(Date.now())
   return ['<?xml version="1.0" encoding="UTF-8"?>', '<hashlist version="1.1">',
     '  <creatorinfo>', `    <name>${xml((() => { try { return os.userInfo().username } catch { return '' } })())}</name>`, `    <hostname>${xml(os.hostname())}</hostname>`,
-    `    <tool>RoarTwin${version ? ' ' + xml(version) : ''}</tool>`, `    <startdate>${now}</startdate>`, `    <finishdate>${now}</finishdate>`, '  </creatorinfo>',
+    `    <tool>RoarKit${version ? ' ' + xml(version) : ''}</tool>`, `    <startdate>${now}</startdate>`, `    <finishdate>${now}</finishdate>`, '  </creatorinfo>',
     ...rows.map((r) => ['  <hash>', `    <file>${xml(r.rel.split(path.sep).join('/'))}</file>`, `    <size>${r.file.size}</size>`,
       `    <lastmodificationdate>${isoS(r.file.mtime)}</lastmodificationdate>`, `    <md5>${r.md5}</md5>`, `    <hashdate>${r.hashedAt}</hashdate>`, '  </hash>'].join('\n')),
     '</hashlist>', ''].join('\n')
@@ -800,7 +800,7 @@ async function recheck(opts, tick = () => {}, stop = () => false) {
   const t0 = Date.now()
   const folder = path.resolve(opts.folder)
   const reports = (await fsp.readdir(folder)).filter((n) => /^_RoarTwin copy report .*\.csv$/i.test(n)).sort()
-  if (!reports.length) throw new Error('There is no RoarTwin copy report in this folder. Choose the folder a twin was made in.')
+  if (!reports.length) throw new Error('There is no RoarKit copy report in this folder. Choose the folder a twin was made in.')
   const report = path.join(folder, reports[reports.length - 1])
   const rows = readCsv((await fsp.readFile(report, 'utf8')).replace(/^﻿/, '')).slice(1).filter((r) => r.length >= 4 && r[2])
   const want = rows.filter((r) => r[3] === 'verified' || r[3] === 'already there').map((r) => ({ rel: r[0], size: +r[1], hash: r[2] }))

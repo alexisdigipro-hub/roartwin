@@ -210,7 +210,7 @@ async function more() {
     const rc = await recheck({ folder: at2('driveA/card') })
     assert.strictEqual(rc.total, 5); assert.strictEqual(rc.safe, 3)
     assert.deepStrictEqual(rc.missing.map((m) => [m.name, m.why]).sort(), [['B.mov', 'changed'], ['D.mov', 'gone']])
-    await assert.rejects(recheck({ folder: at2('card') }), /no RoarTwin copy report/)
+    await assert.rejects(recheck({ folder: at2('card') }), /no RoarKit copy report/)
     assert.deepStrictEqual(readCsv('"a","b ""c"" d"\r\n1,2\r\n'), [['a', 'b "c" d'], ['1', '2']])
     // cards
     fs.mkdirSync(at2('vol/SONY/PRIVATE/M4ROOT'), { recursive: true }); fs.mkdirSync(at2('vol/DOCS/letters'), { recursive: true })

@@ -157,7 +157,7 @@ function winDrives(json) {
   return out
 }
 
-/* the newest RoarTwin copy report in the top two levels of a volume (and the copy folder it sits in) */
+/* the newest copy report (still named _RoarTwin copy report) in the top two levels of a volume (and the copy folder it sits in) */
 const REPORT = /^_RoarTwin copy report (\d{4}-\d{2}-\d{2})(?: (\d{2})-(\d{2}))?\.csv$/i
 async function lastReport(mount, limit = 300) {
   let best = null, seen = 0

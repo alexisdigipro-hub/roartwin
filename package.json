@@ -1,7 +1,7 @@
 {
   "name": "roartwin",
-  "productName": "RoarTwin",
-  "version": "0.4.1",
+  "productName": "RoarKit",
+  "version": "0.4.2",
   "description": "RoarKit (RoarTwin until Oct 2026): a utility of many tools for film people. The Mad Lions Lab.",
   "author": "THEMADLIONS",
   "private": true,
@@ -23,7 +23,7 @@
   },
   "build": {
     "appId": "com.themadlions.roartwin",
-    "productName": "RoarTwin",
+    "productName": "RoarKit",
     "directories": {
       "output": "out",
       "buildResources": "electron/build"
@@ -48,11 +48,11 @@
       ],
       "category": "public.app-category.utilities",
       "identity": null,
-      "artifactName": "RoarTwin-${version}-beta-Mac-${arch}.${ext}"
+      "artifactName": "RoarKit-${version}-beta-Mac-${arch}.${ext}"
     },
     "dmg": {
-      "artifactName": "RoarTwin-${version}-beta-Mac-${arch}.${ext}",
-      "title": "RoarTwin"
+      "artifactName": "RoarKit-${version}-beta-Mac-${arch}.${ext}",
+      "title": "RoarKit"
     },
     "win": {
       "target": [
@@ -63,13 +63,13 @@
           ]
         }
       ],
-      "artifactName": "RoarTwin-${version}-beta-Windows-Setup.${ext}"
+      "artifactName": "RoarKit-${version}-beta-Windows-Setup.${ext}"
     },
     "nsis": {
       "oneClick": true,
       "perMachine": false,
       "runAfterFinish": true,
-      "artifactName": "RoarTwin-${version}-beta-Windows-Setup.${ext}"
+      "artifactName": "RoarKit-${version}-beta-Windows-Setup.${ext}"
     }
   }
 }

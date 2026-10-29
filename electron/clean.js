@@ -1,4 +1,4 @@
-// RoarTwin's Clean up (Alex, 28 Oct: "a tab that tidies the Mac: caches, junk, the cache of DaVinci, After Effects,
+// RoarKit's Clean up (Alex, 28 Oct: "a tab that tidies the Mac: caches, junk, the cache of DaVinci, After Effects,
 // Premiere and the other programs that gather a lot"). Plain Node, tested by test/clean.test.js.
 //
 // Only a fixed list of places, the ones each program keeps its cache in by default (catalogue). What is inside them is
