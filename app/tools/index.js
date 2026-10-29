@@ -9,6 +9,7 @@
      }
    ctx (app.js): h, I, ico, t, bytes, dur, num, plural, dateOf, toast, sheet, seg, switchEl, store, S, draw, busy, stop,
    call(name, args), on(name, fn), pick, pathOf, isFolder, reveal, open, revealLabel, err, dropOn, load, save, platform. */
+import home from './home.js'
 import space from './space.js'
 import leftovers from './leftovers.js'
 import report from './report.js'
@@ -22,4 +23,4 @@ import speed from './speed.js'
 import vault from './vault.js'
 import stats from './stats.js'
 
-export default [space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, stats, vault]
+export default [home, space, leftovers, report, clipcheck, contact, rename, files, archive, drives, speed, stats, vault]

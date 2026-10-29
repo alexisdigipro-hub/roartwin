@@ -54,8 +54,11 @@ function open() {
   nativeTheme.themeSource = th === 'auto' ? 'system' : th === 'light' ? 'light' : 'dark'
   const light = !nativeTheme.shouldUseDarkColors
   const look = process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 } } : frame
+  /* on a Mac the side menu is the system's own frosted glass, as in the Finder and System Settings (Alex, 29 Oct: "a
+     fresher design"): the window is see-through there and the page paints only its own column */
+  const glass = process.platform === 'darwin' ? { vibrancy: 'sidebar', visualEffectState: 'followWindow', backgroundColor: '#00000000' } : { backgroundColor: light ? '#f3f4f7' : '#16181d' }
   win = new BrowserWindow({
-    width: 1320, height: 860, minWidth: 900, minHeight: 600, show: false, backgroundColor: light ? '#f3f4f7' : '#16181d', autoHideMenuBar: true, ...look,
+    width: 1320, height: 860, minWidth: 900, minHeight: 600, show: false, autoHideMenuBar: true, ...look, ...glass,
     webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   })
   win.loadURL(HOME)
@@ -346,14 +349,16 @@ ipcMain.handle('twin:export', async (_e, text) => {
 ipcMain.handle('twin:version', () => app.getVersion())
 /* Settings (Alex, 28 Oct): the look of the app's own windows, menus and scroll bars, and the end-of-job notification */
 const prefs = { lang: 'en', theme: 'dark', notify: true, sound: false, company: '', companyLine: '' }
-nativeTheme.on('updated', () => { if (prefs.theme === 'auto') { try { win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#16181d' : '#f3f4f7') } catch { /* closing */ } } })
+// the window's own colour under the page (not on a Mac, whose window is see-through for the side menu's glass)
+const paintWindow = () => { if (process.platform === 'darwin') return; try { win?.setBackgroundColor(nativeTheme.shouldUseDarkColors ? '#16181d' : '#f3f4f7') } catch { /* closing */ } }
+nativeTheme.on('updated', () => { if (prefs.theme === 'auto') paintWindow() })
 ipcMain.handle('twin:prefs', (_e, v) => {
   Object.assign(prefs, Object.fromEntries(Object.entries(v || {}).filter(([k]) => k in prefs)))
   try { fs.writeFileSync(LOOK_FILE(), JSON.stringify({ theme: prefs.theme })) } catch { /* the next start opens dark, nothing more */ }
   nativeTheme.themeSource = prefs.theme === 'auto' ? 'system' : prefs.theme === 'light' ? 'light' : 'dark'
   const light = !nativeTheme.shouldUseDarkColors
   try {
-    win?.setBackgroundColor(light ? '#f3f4f7' : '#16181d')
+    paintWindow()
     if (process.platform === 'win32') win?.setTitleBarOverlay({ color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 })
   } catch { /* an older window */ }
   return true

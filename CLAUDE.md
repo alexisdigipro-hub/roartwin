@@ -13,6 +13,7 @@ dashes; the app's own text is English by default, with Greek as a choice (app.js
 - Many tools (Alex, 28 Oct): a side menu (app.js NAV); each new tool is app/tools/<id>.js + electron/tools/<id>.js +
   test/<id>.test.js, its CSS in app/tools/tools-*.css; Language and the skips live in Settings. The name on screen is
   RoarKit (app.js NAME); the app file stays RoarTwin.app until the release after 0.3.0 (see README, The name).
+- Look since 0.4.0 (Alex, 29 Oct): app/design.css on top of styles.css (tokens for light/dark, a tile colour per tool in [data-tool]); Overview is app/tools/home.js; a redraw keeps scroll positions. Keep both themes right in anything new.
 - Never delete a file: shell.trashItem only, and one file of each group always stays (checked in app.js and main.js).
 - Look: RoarMe's dark glass (graphite, round glass buttons, pill fields, soft tiles, the chosen option as glass with
   the sliding lens), accent #ff453a.

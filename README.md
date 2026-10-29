@@ -29,6 +29,17 @@ artifactName and the workflow's names then). Settings stay in the RoarTwin folde
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.4.0 (29 Oct): Overview, Settings, the new look.**
+- Overview, the first page: a score for the computer and what needs care first (start-up disk, failing or full drives,
+  caches, memory, heat, battery, an update), each with the tool that sorts it out; the numbers at a glance; Jump to.
+- Settings in groups: Dark / Light / Automatic, six accent colours, text size, less movement, Open where I left off,
+  a notification (and a sound) when a long job ends while you are in another app, the company on PDFs, updates.
+- The look (app/design.css, over styles.css): the Mac's own frosted side menu (vibrancy), a coloured tile for each
+  tool, a glass lens that glides to the chosen tool, pages that come in from below or above, cards one after the
+  other, buttons that lift and press, a shine on the main button, springy switches, thin scroll bars.
+- A page drawn again keeps where it was scrolled (app.js scrollsOf / putScrolls).
+- Every tool was audited (bugs fixed with tests) and grew: see the commit for the list.
+
 ## Layout of the tools
 - `app/tools/<tool>.js`: a tool's page (`{ id, el, view(ctx), top(ctx), demo }`, see app/tools/index.js) and its
   `tools-<x>.css`; `electron/tools/<tool>.js`: its Mac/Windows side (`register(ctx)`, `ctx.handle('<tool>-<what>')`).
