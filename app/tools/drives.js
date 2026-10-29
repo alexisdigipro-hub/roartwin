@@ -66,7 +66,7 @@ function tile(ctx, d) {
           h('span', { class: 'dh-pct' }, t('{p}% used', { p: Math.round(used * 100) })))),
       h('div', { class: 'f-meta' },
         ...d.mounts.map((m) => h('span', { class: 'chip', title: m.path }, m.name + (m.fs ? ' · ' + m.fs : ''))),
-        d.report ? h('span', { class: 'chip tint', style: { '--c': 'var(--acc)' }, title: d.report.folder }, h('i'), t('Copied and checked on {w}', { w: d.report.when.slice(0, 10) })) : null,
+        d.report ? h('span', { class: 'chip tint', style: { '--c': 'var(--ok)' }, title: d.report.folder }, h('i'), t('Copied and checked on {w}', { w: d.report.when.slice(0, 10) })) : null,
         d.report ? h('button', { class: 'btn dh-check', onclick: () => { Object.assign(ctx.S, { mode: 'backup', bmode: 'report', copyDir: d.report.folder, view: 'home' }); ctx.draw() } }, t('Check it now')) : null)))
 }
 

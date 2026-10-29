@@ -21,8 +21,9 @@ main.fm-main { display: flex; flex-direction: column; overflow: hidden; }
 .fm-head { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 10px 6px; }
 .fm-crumbs { flex: 1; min-width: 0; display: flex; gap: 2px; overflow: hidden; }
 .fm-crumbs::-webkit-scrollbar { display: none; }
-.fm-crumb { flex: 0 1 auto; min-width: 2.4em; display: flex; align-items: center; height: 28px; padding: 0 9px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 12.5px; white-space: nowrap; transition: background .2s, color .2s; }
+.fm-crumb { flex: 0 1 auto; min-width: 3.6em; display: flex; align-items: center; height: 28px; padding: 0 9px; border: 0; border-radius: 999px; background: none; color: var(--muted); font-size: 12.5px; white-space: nowrap; transition: background .2s, color .2s; }
 .fm-crumb span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.fm-crumb.more { flex: none; min-width: 0; padding: 0 8px; }
 .fm-crumb:hover { background: var(--glass-2); color: var(--text); }
 .fm-crumb:last-child { flex: 0 0 auto; max-width: 70%; color: var(--text); font-weight: 600; }
 .fm-crumb + .fm-crumb::before { content: '›'; flex: none; margin-right: 7px; color: var(--dim); }

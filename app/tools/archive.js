@@ -427,9 +427,9 @@ export default {
       for (let i = 0; i <= 8; i++) { emit('archive-progress', { done: i, total: 8 }); await new Promise((r) => setTimeout(r, 120)) }
       return { folder: '/Users/alex/Downloads/Ilie mou - Final deliverables', count: 8, skipped: [], took: 41000 }
     },
-    'archive-make': async ({ items }, emit) => {
+    'archive-make': async ({ items, password }, emit) => {
       for (let i = 0; i <= 10; i++) { emit('archive-progress', { done: i * 4, total: 40 }); await new Promise((r) => setTimeout(r, 100)) }
-      return { path: '/Users/alex/Projects/Spring campaign/Exports.zip', size: 1.92e9, files: 40, original: 2.31e9, items, took: 63000 }
+      return { path: '/Users/alex/Projects/Spring campaign/Exports.zip', size: 1.92e9, files: 40, original: 2.31e9, items, took: 63000, locked: !!password }
     },
   },
 }

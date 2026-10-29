@@ -19,7 +19,7 @@ async function start(ctx) {
 }
 async function savePDF(ctx) {
   const t = ctx.t
-  try { if (await ctx.call('contact-pdf', { id: st.res?.id, cols: st.cols, landscape: st.landscape, title: st.title.trim(), words: { title: t('Contact sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
+  try { if (await ctx.call('contact-pdf', { id: st.res?.id, cols: st.cols, landscape: st.landscape, title: st.title.trim(), locale: ctx.S.lang === 'el' ? 'el-GR' : 'en-GB', words: { title: t('Contact sheet'), clips: t('clips') } })) ctx.toast(t('Saved')) } catch (e) { ctx.toast(ctx.err(e)) }
 }
 
 export default {

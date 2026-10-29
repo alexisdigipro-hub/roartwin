@@ -1,7 +1,7 @@
 // Clip check (Alex, 28 Oct): every clip of a card or a folder decoded from its first frame to its last, before the card
 // is formatted; a clip cut short or with damaged frames is listed with what is wrong in plain words. Reads only.
 // Through electron/tools/media.js (clipcheck-scan).
-import { EL_SHARED, folderBox, progressEl, runJob, demoRun, PAGE, moreEl } from './report.js'
+import { EL_SHARED, folderBox, progressEl, runJob, demoRun, PAGE, moreEl, appsOf } from './report.js'
 
 const st = { root: '', res: null, busy: false, p: null, quick: false, shown: PAGE }
 let loaded = false
@@ -76,7 +76,7 @@ export default {
           h('div', { class: 'files' }, ...unread.slice(0, PAGE).map((b) => h('div', { class: 'file nocheck' },
             h('div', { class: 'thumb' }, ico('play')),
             h('div', { class: 'f-main' }, h('div', { class: 'f-name', title: b.name }, b.name), h('div', { class: 'f-dir', title: b.dir }, '‎' + b.dir),
-              h('div', { class: 'f-meta' }, h('span', { class: 'chip' }, b.why), h('span', { class: 'chip' }, bytes(b.size)), b.app ? h('span', { class: 'chip' }, t('Open it in {a}.', { a: b.app })) : null)),
+              h('div', { class: 'f-meta' }, h('span', { class: 'chip' }, b.why), h('span', { class: 'chip' }, bytes(b.size)), b.app ? h('span', { class: 'chip' }, t('Open it in {a}.', { a: appsOf(t, b.app) })) : null)),
             h('div', { class: 'f-act' }, h('button', { class: 'ib sm', title: ctx.revealLabel(), 'aria-label': ctx.revealLabel(), html: I.reveal, onclick: () => ctx.reveal(b.path) })))))) : null,
         r.quick ? h('div', { class: 'go' }, h('button', { class: 'btn', onclick: () => { st.quick = false; ctx.save('clipcheck', 'quick', false); start(ctx) } }, ico('pulse'), t('Check every frame'))) : null))
     }

@@ -10,7 +10,7 @@ export const EL_SHARED = {
   '{a} of {b} clips': '{a} από {b} clips', 'Back': 'Πίσω', 'Saved': 'Αποθηκεύτηκε',
   'Choose a folder or a drive.': 'Διάλεξε φάκελο ή δίσκο.', 'Stopped.': 'Σταμάτησε.',
   'No clips in this folder.': 'Δεν υπάρχουν clips σε αυτόν τον φάκελο.', 'clips': 'clips',
-  'Show {n} more': 'Δείξε {n} ακόμα', 'Photos too': 'Και φωτογραφίες', 'Pictures from cameras and phones as well: their size and a frame.': 'Και τις φωτογραφίες από κάμερες και κινητά: το μέγεθός τους και μια εικόνα.',
+  'Show {n} more': 'Δείξε {n} ακόμα', ' or ': ' ή ', 'Photos too': 'Και φωτογραφίες', 'Pictures from cameras and phones as well: their size and a frame.': 'Και τις φωτογραφίες από κάμερες και κινητά: το μέγεθός τους και μια εικόνα.',
 }
 // the folder (or card) to look in, dropped or chosen
 export function folderBox(ctx, st, key, onSet) {
@@ -59,6 +59,8 @@ export async function runJob(ctx, st, door, args, event) {
 export const csvOf = (rows) => rows.map((r) => r.map((x) => `"${String(x ?? '').replace(/"/g, '""')}"`).join(',')).join('\r\n')
 export const codecOf = (c) => (c.video ? c.video.name : c.unread ? c.unread : (c.audio?.[0]?.codec || '').replace(/^pcm_.*/, 'PCM').toUpperCase())
 // the locale of the dates on a PDF, from the app's language
+// 'Blackmagic RAW Player or DaVinci Resolve' in the app's words
+export const appsOf = (t, s) => String(s || '').split(' or ').join(t(' or '))
 export const localeOf = (ctx) => (ctx.S.lang === 'el' ? 'el-GR' : 'en-GB')
 // a long list is drawn a page at a time (a card of 2,000 clips stays quick)
 export const PAGE = 120
@@ -134,7 +136,7 @@ function clipEl(ctx, c) {
       h('div', { class: 'f-meta' },
         c.dur != null ? chip(dur(c.dur)) : null,
         c.tc ? h('span', { class: 'chip tint', style: { '--c': '#64d2ff' } }, h('i'), 'TC ' + c.tc + (c.tcOut ? ' → ' + c.tcOut : '')) : null,
-        c.unread ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: t('Open it in {a}.', { a: c.unreadApp }) }, h('i'), t('{f}: not read here', { f: c.unread })) : chip(codecOf(c)),
+        c.unread ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' }, title: t('Open it in {a}.', { a: appsOf(t, c.unreadApp) }) }, h('i'), t('{f}: not read here', { f: c.unread })) : chip(codecOf(c)),
         v ? chip(`${v.w}×${v.h}` + (v.fps && c.kind !== 'photo' ? ` · ${Math.round(v.fps * 1000) / 1000} fps` : '')) : null,
         c.meta?.make || c.meta?.model ? chip([c.meta.make, c.meta.model].filter(Boolean).join(' ')) : null,
         v?.hdr ? h('span', { class: 'chip tint', style: { '--c': 'var(--warn)' } }, h('i'), v.hdr) : null,

@@ -128,6 +128,8 @@ td{padding:4px;border-bottom:1px solid #eee;vertical-align:middle}tr{page-break-
 // the company line at the top of a page (Settings > Reports); nothing when it is not set
 const companyHTML = (co) => (co?.company || co?.companyLine ? `<div class="co"><b>${esc(co.company)}</b><span>${esc(co.companyLine)}</span></div>` : '')
 const when = (ms, locale) => { try { return new Date(ms || Date.now()).toLocaleString(locale || 'en-GB') } catch { return new Date(ms || Date.now()).toLocaleString('en-GB') } }
+// the page's language, so Greek capitals lose their accents as they should (ΟΝΟΜΑ, not ΌΝΟΜΑ)
+const langOf = (locale) => (/^el/i.test(String(locale || '')) ? 'el' : 'en')
 // every codec with how many clips and how long they run, for the totals
 function byCodec(clips) {
   const m = new Map()
@@ -142,18 +144,18 @@ function reportHTML(r, words = {}, co = {}, locale = '') {
 <td>${esc(hms(c.dur))}</td><td>${esc(c.tc)}</td><td>${esc(c.tcOut || '')}</td><td>${esc(codecLabel(c))}</td><td>${c.video ? `${c.video.w}×${c.video.h}` : ''}</td>
 <td>${c.video?.fps ? esc(Math.round(c.video.fps * 1000) / 1000) : ''}</td><td>${c.audio?.length ? esc(c.audio.map((a) => `${a.channels || a.layout} ch · ${Math.round(a.rate / 100) / 10} kHz`).join(', ')) : ''}</td>
 <td>${esc(size(c.size))}</td><td>${esc(c.date || '')}</td></tr>`).join('\n')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${PAGE_CSS}</style></head><body><div class="pg">${companyHTML(co)}
+  return `<!doctype html><html lang="${langOf(locale)}"><head><meta charset="utf-8"><style>${PAGE_CSS}</style></head><body><div class="pg">${companyHTML(co)}
 <h1><b>${W(words, 'title', 'Media report')}</b></h1><div class="sub">${esc(r.root)} · ${esc(when(r.at, locale))}</div>
-<div class="tot"><span>${clips.length} ${W(words, 'clips', 'clips')}</span><span>${esc(hms(total))}</span><span>${esc(size(bytes))}</span>${byCodec(clips).map((c) => `<span>${esc(c.name)} · ${c.n} · ${esc(hms(c.dur))}</span>`).join('')}</div>
+<div class="tot"><span>${clips.length} ${W(words, 'clips', 'clips')}</span><span>${esc(hms(total))}</span><span>${esc(size(bytes))}</span>${byCodec(clips).map((c) => `<span>${esc(c.name)} · ${c.n}${c.dur ? ' · ' + esc(hms(c.dur)) : ''}</span>`).join('')}</div>
 <table><thead><tr><th></th><th>${W(words, 'name', 'Name')}</th><th>${W(words, 'length', 'Length')}</th><th>${W(words, 'tc', 'TC in')}</th><th>${W(words, 'tcOut', 'TC out')}</th><th>${W(words, 'codec', 'Codec')}</th><th>${W(words, 'picture', 'Picture')}</th><th>fps</th><th>${W(words, 'sound', 'Sound')}</th><th>${W(words, 'size', 'Size')}</th><th>${W(words, 'date', 'Date')}</th></tr></thead>
 <tbody>${rows}</tbody></table><div class="foot">RoarKit · The Mad Lions Lab</div></div></body></html>`
 }
 
-function contactHTML(sheet, { cols = 4, words = {}, title = '', co = {} } = {}) {
+function contactHTML(sheet, { cols = 4, words = {}, title = '', co = {}, locale = '' } = {}) {
   const n = Math.max(1, Math.min(8, Number(cols) || 4))
   const tiles = (sheet.clips || []).map((c) => `<div class="t"><div class="fr" style="grid-template-columns:repeat(${Math.max(1, c.frames.length)},1fr)">${c.frames.map((f) => `<img src="${esc(f)}">`).join('') || '<div class="no"></div>'}</div>
 <div class="nm">${esc(c.name)}</div><div class="mt">${esc([hms(c.dur), c.tc ? 'TC ' + c.tc : '', c.res || ''].filter(Boolean).join(' · '))}</div></div>`).join('\n')
-  return `<!doctype html><html><head><meta charset="utf-8"><style>${PAGE_CSS}
+  return `<!doctype html><html lang="${langOf(locale)}"><head><meta charset="utf-8"><style>${PAGE_CSS}
 .grid{display:grid;grid-template-columns:repeat(${n},1fr);gap:8px}.t{page-break-inside:avoid}.fr{display:grid;gap:2px}.fr img,.no{width:100%;aspect-ratio:16/9;object-fit:cover;border-radius:3px;display:block;background:#111}
 .t .nm{margin-top:3px;font-size:8.5px;word-break:break-all}.mt{color:#777;font-size:8px}</style></head><body><div class="pg">${companyHTML(co)}
 <h1><b>${esc(title) || W(words, 'title', 'Contact sheet')}</b></h1><div class="sub">${esc(sheet.root)} · ${(sheet.clips || []).length} ${W(words, 'clips', 'clips')}</div>
@@ -285,9 +287,9 @@ function register(ctx) {
     ctx.allow(files.map((f) => f.path))
     return sheets.add({ root: String(root), clips, took: Date.now() - t0 })
   }))
-  ctx.handle('contact-pdf', async ({ id, cols, landscape, title, words }) => {
+  ctx.handle('contact-pdf', async ({ id, cols, landscape, title, words, locale }) => {
     const s = sheets.get(id)
-    return s ? ctx.savePDF(contactHTML(s, { cols, words, title: String(title || ''), co: co() }), `Contact sheet ${baseName(s.root)}.pdf`, { landscape: !!landscape }) : ''
+    return s ? ctx.savePDF(contactHTML(s, { cols, words, title: String(title || ''), co: co(), locale }), `Contact sheet ${baseName(s.root)}.pdf`, { landscape: !!landscape }) : ''
   })
 
   ctx.handle('media-save-csv', ({ text, name }) => ctx.saveText(String(text || ''), String(name || 'Media report.csv'), 'csv'))

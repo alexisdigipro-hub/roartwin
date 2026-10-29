@@ -135,6 +135,7 @@ const LOG = `Input #0, mov,mp4,m4a,3gp,3g2,mj2, from 'A001_C003.mov':
   assert.ok(saved[0].html.includes('T001.wav') && !saved[0].html.includes('A001_C001.mov'), 'the PDF of the report asked for, not the last one')
   assert.ok(saved[0].html.includes('The Mad Lions') && saved[0].html.includes('themadlions.com'), 'the company heads the PDF')
   assert.ok(saved[0].name.endsWith('SOUND.pdf'))
+  assert.ok(saved[0].html.includes('<html lang="el">'), 'a Greek PDF says so, for its capitals')
   const cc = await doors['clipcheck-scan']({ root: at('CARD'), quick: true }, { emit })
   assert.ok(cc.quick && cc.unread.length === 1 && cc.broken.some((b) => b.name === 'A001_C003.mp4'))
   const sh = await doors['contact-scan']({ root: at('CARD'), frames: 1, photos: true }, { emit })

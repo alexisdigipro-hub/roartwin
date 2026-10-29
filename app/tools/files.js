@@ -109,7 +109,13 @@ function paneEl(ctx, i) {
   const sep = pane.path.includes('\\') ? '\\' : '/'
   const segs = pane.path.split(/[\\/]/).filter(Boolean)
   let acc = pane.path.startsWith('/') ? '/' : ''
-  const crumbs = segs.map((s, k) => { acc = k === 0 && !acc ? s + sep : acc + (acc.endsWith(sep) ? '' : sep) + s; const p = acc; return h('button', { class: 'fm-crumb', title: p, onclick: () => openIn(i, p) }, h('span', {}, s)) })
+  const all = segs.map((s, k) => { acc = k === 0 && !acc ? s + sep : acc + (acc.endsWith(sep) ? '' : sep) + s; return { s, p: acc } })
+  // a long path: its last three folders, and … for the ones above (it opens the folder just above them)
+  const keep = !single() && F.info ? 2 : 3, cut = all.length > keep + 1 ? all.length - keep : 0
+  const crumbs = [
+    cut ? h('button', { class: 'fm-crumb more', title: all[cut - 1].p, 'aria-label': all[cut - 1].p, onclick: () => openIn(i, all[cut - 1].p) }, h('span', {}, '…')) : null,
+    ...all.slice(cut).map(({ s, p }) => h('button', { class: 'fm-crumb', title: p, onclick: () => openIn(i, p) }, h('span', {}, s))),
+  ].filter(Boolean)
   const head = h('div', { class: 'fm-head' },
     h('button', { class: 'ib sm', title: t('Up a folder'), 'aria-label': t('Up a folder'), html: SVG.up, disabled: !pane.parent, onclick: () => openIn(i, pane.parent) }),
     h('div', { class: 'fm-crumbs' }, ...crumbs),
@@ -211,7 +217,9 @@ function ask(title, value, okLabel) {
   return new Promise((done) => {
     let input
     veil('fm-ask', (close) => {
-      const finish = (v) => { close(); done(v) }
+      // the answer first: closing the window answers null, and a promise keeps its first answer (audit, 29 Oct: New
+      // folder, Rename and Go to always got null, so they did nothing)
+      const finish = (v) => { done(v); close() }
       input = h('input', { class: 'fm-input', value, onkeydown: (e) => { if (e.key === 'Enter') finish(input.value.trim() || null) } })
       return [h('h3', {}, title), input, h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => finish(null) }, t('Cancel')), h('button', { class: 'btn main', onclick: () => finish(input.value.trim() || null) }, okLabel))]
     }, () => done(null))
