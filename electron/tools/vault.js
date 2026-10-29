@@ -8,7 +8,10 @@
 //
 // The pure functions (seal, open, parseCsv, generate…) need no Electron, so test/vault.test.js runs them as they are.
 // The page (app/tools/vault.js) never gets the key, the file or the list's passwords: it asks for one password, by
-// entry id, to show it or copy it, and the copy is cleared from the clipboard after 30 s.
+// entry id, to show it or copy it, and the copy is cleared from the clipboard after 30 s (and when the vault locks).
+// Audit, 29 Oct: a crafted file's scrypt cost is bounded (it could ask for gigabytes), every write is flushed to the
+// disk before the rename, a second unlock wipes the first key, UTF-16 CSVs (Excel) and re-imports without duplicates;
+// new: two-factor codes (TOTP, RFC 6238) per entry, and password health (weak, reused, old) worked out here.
 const fs = require('fs')
 const path = require('path')
 const crypto = require('crypto')
@@ -46,7 +49,8 @@ function readHead(buf) {
   if (version !== VERSION) throw new Error('This vault was made by a newer version.')
   const salt = buf.subarray(at, at + 16); at += 16
   const params = { logN: buf[at], r: buf[at + 1], p: buf[at + 2] }; at += 3
-  if (params.logN < 14 || params.logN > 22 || params.r < 1 || params.r > 32 || params.p < 1 || params.p > 16) throw new Error('Not a vault file.')
+  // only what this app writes and a little more: a made-up header must not make scrypt ask for gigabytes
+  if (params.logN < 14 || params.logN > 20 || params.r < 1 || params.r > 16 || params.p < 1 || params.p > 4 || maxmem(params) > 1 << 30) throw new Error('Not a vault file.')
   return { head: buf.subarray(0, at), salt: Buffer.from(salt), params, iv: buf.subarray(at, at + 12), tag: buf.subarray(at + 12, at + 28), body: buf.subarray(at + 28) }
 }
 function openWith(buf, key) {
@@ -68,29 +72,35 @@ async function open(buf, password) {
 function writeAtomic(file, buf) {
   fs.mkdirSync(path.dirname(file), { recursive: true })
   const tmp = `${file}.${process.pid}.tmp`
-  fs.writeFileSync(tmp, buf, { mode: 0o600 })
+  // on the disk before it takes the vault's place: a power cut cannot leave an empty vault.bin
+  const fd = fs.openSync(tmp, 'w', 0o600)
+  try { fs.writeSync(fd, buf); fs.fsyncSync(fd) } finally { fs.closeSync(fd) }
   if (fs.existsSync(file)) fs.copyFileSync(file, file + '.bak')
   fs.renameSync(tmp, file)
 }
 
 /* ---------- entries ---------- */
-const FIELDS = ['title', 'username', 'password', 'website', 'notes', 'tag']
+const FIELDS = ['title', 'username', 'password', 'website', 'notes', 'tag', 'totp']
 const clip = (v, n) => String(v ?? '').slice(0, n)
 function cleanEntry(e, old = {}) {
   const out = { id: old.id || e.id || crypto.randomUUID(), created: old.created || Date.now(), updated: Date.now() }
   for (const k of FIELDS) out[k] = e[k] !== undefined ? clip(e[k], k === 'notes' ? 8000 : 400) : (old[k] ?? '')
+  out.totp = out.totp.trim()
+  if (out.totp && !parseTotp(out.totp)) throw new Error('That two-factor key is not a valid one.')
+  // when the password itself changed (for "old" in the health check)
+  out.changed = e.password !== undefined && e.password !== old.password ? Date.now() : old.changed || old.created || out.created
   out.title = out.title.trim() || out.website.replace(/^https?:\/\//, '').split('/')[0] || 'Untitled'
   out.fav = e.fav !== undefined ? !!e.fav : !!old.fav
   return out
 }
 // the list as the page sees it: never a password
-const shown = (e) => ({ id: e.id, title: e.title, username: e.username, website: e.website, notes: e.notes, tag: e.tag, fav: !!e.fav, updated: e.updated, hasPassword: !!e.password })
+const shown = (e, health = []) => ({ id: e.id, title: e.title, username: e.username, website: e.website, notes: e.notes, tag: e.tag, fav: !!e.fav, updated: e.updated, hasPassword: !!e.password, hasTotp: !!e.totp, health })
 
 /* a CSV export of Chrome, Safari, Firefox, 1Password, Bitwarden: name/title, url, username, password, note(s) */
 function parseCsv(text) {
   const rows = []
   let row = [], cell = '', q = false
-  const s = String(text).replace(/^﻿/, '')
+  const s = String(text).replace(/^\ufeff/, '')
   for (let i = 0; i < s.length; i++) {
     const ch = s[i]
     if (q) {
@@ -109,6 +119,83 @@ function parseCsv(text) {
     password: col('password', 'login_password'), notes: col('note', 'notes', 'extra'), tag: col('folder', 'group', 'category') }
   if (at.password < 0) return []
   return lines.slice(1).map((r) => Object.fromEntries(Object.entries(at).map(([k, i]) => [k, i >= 0 ? (r[i] || '').trim() : '']))).filter((e) => e.password || e.username)
+}
+
+/* a CSV file as text: UTF-8, or UTF-16 as Excel saves it ("Unicode text") */
+function csvText(buf) {
+  if (buf[0] === 0xff && buf[1] === 0xfe) return buf.subarray(2).toString('utf16le')
+  if (buf[0] === 0xfe && buf[1] === 0xff) { const b = Buffer.from(buf.subarray(2)); b.swap16(); return b.toString('utf16le') }
+  return buf.toString('utf8')
+}
+/* the rows of an import that are not in the vault already (the same name, username and password) */
+function newRows(rows, entries) {
+  const key = (e) => [e.title, e.website, e.username, e.password].map((x) => String(x || '').trim().toLowerCase()).join('\u0000')
+  const have = new Set(entries.map(key))
+  return rows.filter((r) => { const k = key({ ...r, title: cleanEntry(r).title }); if (have.has(k)) return false; have.add(k); return true })
+}
+
+/* ---------- two-factor codes (TOTP, RFC 6238) ---------- */
+function base32(str) {
+  const A = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567'
+  const s = String(str).toUpperCase().replace(/[\s=-]/g, '')
+  if (!s || /[^A-Z2-7]/.test(s)) return null
+  let bits = 0, val = 0
+  const out = []
+  for (const ch of s) { val = (val << 5) | A.indexOf(ch); bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8 } }
+  return out.length ? Buffer.from(out) : null
+}
+/* a key as a site shows it (base32, spaces and all) or its otpauth:// link (the QR code's text) */
+function parseTotp(input) {
+  const s = String(input || '').trim()
+  if (!s) return null
+  let secret = s, digits = 6, period = 30, algo = 'sha1'
+  if (/^otpauth:\/\//i.test(s)) {
+    let u
+    try { u = new URL(s) } catch { return null }
+    if (u.host.toLowerCase() !== 'totp') return null
+    secret = u.searchParams.get('secret') || ''
+    digits = Number(u.searchParams.get('digits') || 6)
+    period = Number(u.searchParams.get('period') || 30)
+    algo = String(u.searchParams.get('algorithm') || 'SHA1').toLowerCase()
+  }
+  const key = base32(secret)
+  if (!key || ![6, 7, 8].includes(digits) || !(period >= 10 && period <= 120) || !['sha1', 'sha256', 'sha512'].includes(algo)) return null
+  return { key, digits, period, algo }
+}
+/* the code at a moment: HMAC of the time step, dynamic truncation */
+function totpAt(t, ms = Date.now()) {
+  const step = Math.floor(ms / 1000 / t.period)
+  const msg = Buffer.alloc(8)
+  msg.writeBigUInt64BE(BigInt(step))
+  const mac = crypto.createHmac(t.algo, t.key).update(msg).digest()
+  const o = mac[mac.length - 1] & 15
+  const n = ((mac[o] & 127) << 24) | (mac[o + 1] << 16) | (mac[o + 2] << 8) | mac[o + 3]
+  return { code: String(n % 10 ** t.digits).padStart(t.digits, '0'), left: t.period - (Math.floor(ms / 1000) % t.period), period: t.period }
+}
+
+/* ---------- password health ---------- */
+const bitsOf = (p) => {
+  const pool = (/[a-z]/.test(p) ? 26 : 0) + (/[A-Z]/.test(p) ? 26 : 0) + (/\d/.test(p) ? 10 : 0) + (/[^a-zA-Z0-9]/.test(p) ? 20 : 0) || 26
+  // a run of one character or a plain sequence counts for little
+  const plain = /^(.)\1+$/.test(p) || /^(0123456789|1234567890|abcdefghij|qwertyuiop|asdfghjkl|password|passw0rd|letmein|welcome)/i.test(p)
+  return plain ? 10 : p.length * Math.log2(pool)
+}
+const YEAR = 365 * 864e5
+/* for every entry: 'weak' (short or guessable), 'reused' (the same password in another entry), 'old' (not changed for a year) */
+function healthOf(entries, now = Date.now()) {
+  const count = new Map()
+  for (const e of entries) if (e.password) count.set(e.password, (count.get(e.password) || 0) + 1)
+  const out = {}
+  for (const e of entries) {
+    const h = []
+    if (e.password) {
+      if (e.password.length < 10 || bitsOf(e.password) < 50) h.push('weak')
+      if (count.get(e.password) > 1) h.push('reused')
+      if (now - (e.changed || e.created || now) > YEAR) h.push('old')
+    }
+    out[e.id] = h
+  }
+  return out
 }
 
 /* ---------- the generator ---------- */
@@ -149,16 +236,27 @@ function register(ctx) {
   let idleMin = 5
   let idleTimer = null
   let clipTimer = null
+  let secretOnClip = '' // the last password copied, taken off the clipboard when the vault locks
   const notify = (ev, val) => { try { ctx.win()?.webContents.send('tool:' + ev, val) } catch { /* no window */ } }
+  const clearSecret = () => { try { if (secretOnClip && clipboard.readText() === secretOnClip) clipboard.clear() } catch { /* no clipboard */ } secretOnClip = ''; clearTimeout(clipTimer) }
   const lock = () => {
     if (!v) return
     v.key.fill(0)
     v = null
     clearTimeout(idleTimer)
+    clearSecret()
     notify('vault-locked', true)
   }
+  /* to the clipboard from here (never from the page) and off it again after 30 s, if nothing else was copied since */
+  const toClip = (val, secret) => {
+    clipboard.writeText(String(val))
+    clearTimeout(clipTimer)
+    secretOnClip = secret ? String(val) : ''
+    if (secret) clipTimer = setTimeout(clearSecret, 30e3)
+  }
   const touch = () => { clearTimeout(idleTimer); if (v) idleTimer = setTimeout(lock, idleMin * 60e3) }
-  const need = () => { if (!v) throw new Error('The vault is locked.'); touch(); return v }
+  // a person's own action keeps the vault open; a code refreshing by itself does not (quiet)
+  const need = (quiet) => { if (!v) throw new Error('The vault is locked.'); if (!quiet) touch(); return v }
   const save = () => { writeAtomic(FILE(), sealWith(v.data, v.key, v.salt, v.params)) }
   const find = (id) => { const e = need().data.entries.find((x) => x.id === id); if (!e) throw new Error('Not in the vault.'); return e }
 
@@ -166,7 +264,7 @@ function register(ctx) {
     powerMonitor.on('suspend', lock)
     powerMonitor.on('lock-screen', lock)
   })
-  app.on('before-quit', lock)
+  app.on('before-quit', () => { lock(); clearSecret() })
   // the app's own window closing (not the hidden one a PDF is printed in: destroy() fires no 'close')
   app.on('browser-window-created', (_e, w) => w.on('close', () => { if (w === ctx.win()) lock() }))
 
@@ -186,20 +284,21 @@ function register(ctx) {
     try { buf = fs.readFileSync(FILE()) } catch { throw new Error('There is no vault yet.') }
     const r = await open(buf, String(password || ''))
     if (!Array.isArray(r.data.entries)) r.data.entries = []
+    if (v) v.key.fill(0) // opened twice: the first key does not stay in memory
     v = r
     touch()
     return { ok: true, count: v.data.entries.length }
   })
   ctx.handle('vault-lock', () => { lock(); return { ok: true } })
   ctx.handle('vault-idle', ({ minutes }) => { idleMin = [1, 5, 15].includes(Number(minutes)) ? Number(minutes) : 5; touch(); return { idle: idleMin } })
-  ctx.handle('vault-list', () => need().data.entries.map(shown))
+  ctx.handle('vault-list', () => { const d = need().data; const hl = healthOf(d.entries); return d.entries.map((e) => shown(e, hl[e.id])) })
   ctx.handle('vault-save', ({ entry }) => {
     const d = need().data
     const i = entry?.id ? d.entries.findIndex((x) => x.id === entry.id) : -1
     const e = cleanEntry(entry || {}, i >= 0 ? d.entries[i] : {})
     if (i >= 0) d.entries[i] = e; else d.entries.push(e)
     d.updated = Date.now(); save()
-    return shown(e)
+    return shown(e, healthOf(d.entries)[e.id])
   })
   ctx.handle('vault-delete', ({ id }) => {
     const d = need().data
@@ -211,12 +310,22 @@ function register(ctx) {
   // copied here, not in the page, and taken off the clipboard after 30 s if nothing else was copied since
   ctx.handle('vault-copy', ({ id, field }) => {
     const e = find(id)
-    const val = field === 'username' ? e.username : field === 'website' ? e.website : e.password
-    clipboard.writeText(val)
-    clearTimeout(clipTimer)
-    if (field !== 'username' && field !== 'website') clipTimer = setTimeout(() => { if (clipboard.readText() === val) clipboard.clear() }, 30e3)
-    return { ok: true, clears: field !== 'username' && field !== 'website' }
+    if (field === 'totp') { const t = parseTotp(e.totp); if (!t) throw new Error('No two-factor key.'); toClip(totpAt(t).code, true); return { ok: true, clears: true } }
+    const secret = field !== 'username' && field !== 'website'
+    toClip(field === 'username' ? e.username : field === 'website' ? e.website : e.password, secret)
+    return { ok: true, clears: secret }
   })
+  // a generated password: copied the same way, so it too leaves the clipboard after 30 s
+  ctx.handle('vault-copy-text', ({ text }) => { toClip(String(text || '').slice(0, 400), true); return { ok: true, clears: true } })
+  // the two-factor code of one entry, refreshing (quiet: a code on the screen does not keep the vault open)
+  ctx.handle('vault-code', ({ id }) => {
+    const e = need(true).data.entries.find((x) => x.id === id)
+    const t = e && parseTotp(e.totp)
+    if (!t) throw new Error('No two-factor key.')
+    return totpAt(t)
+  })
+  // the key itself, to edit it (as a password is revealed)
+  ctx.handle('vault-totp-key', ({ id }) => find(id).totp || '')
   ctx.handle('vault-generate', (opts) => generate(opts || {}))
   ctx.handle('vault-change', async ({ old, password }) => {
     const cur = need()
@@ -247,12 +356,14 @@ function register(ctx) {
     const cur = need()
     const { canceled, filePaths } = await dialog.showOpenDialog(ctx.win(), { title: 'A passwords CSV', properties: ['openFile'], filters: [{ name: 'CSV', extensions: ['csv'] }] })
     if (canceled || !filePaths?.[0]) return { added: 0 }
-    const rows = parseCsv(fs.readFileSync(filePaths[0], 'utf8'))
+    const all = parseCsv(csvText(fs.readFileSync(filePaths[0])))
+    const rows = newRows(all, cur.data.entries)
     for (const r of rows) cur.data.entries.push(cleanEntry(r))
     if (rows.length) { cur.data.updated = Date.now(); save() }
     touch()
-    return { added: rows.length, file: path.basename(filePaths[0]) }
+    return { added: rows.length, already: all.length - rows.length, file: path.basename(filePaths[0]) }
   })
 }
 
-module.exports = { register, seal, sealWith, open, openWith, deriveKey, readHead, writeAtomic, parseCsv, generate, cleanEntry, shown, PARAMS, LOOKALIKE }
+module.exports = { register, seal, sealWith, open, openWith, deriveKey, readHead, writeAtomic, parseCsv, csvText, newRows, generate, cleanEntry, shown, PARAMS, LOOKALIKE,
+  base32, parseTotp, totpAt, healthOf, bitsOf }

@@ -20,7 +20,8 @@ const KINDS = [
   { id: 'resolve-cache', app: 'Resolve', name: /^cacheclip$/i, what: 'Render cache' },
   { id: 'premiere-video', app: 'Premiere', name: /^adobe premiere pro video previews$/i, what: 'Video previews' },
   { id: 'premiere-audio', app: 'Premiere', name: /^adobe premiere pro audio previews$/i, what: 'Audio previews' },
-  { id: 'ae-cache', app: 'After Effects', name: /^adobe after effects disk cache$/i, what: 'Disk cache' },
+  // After Effects names the folder it makes after the computer: "Adobe After Effects Disk Cache - Alex's MacBook Pro.local"
+  { id: 'ae-cache', app: 'After Effects', name: /^adobe after effects disk cache( - .+)?$/i, what: 'Disk cache' },
   { id: 'fcp-render', app: 'Final Cut', name: /^render files$/i, what: 'Render files', fcp: true },
   { id: 'fcp-transcoded', app: 'Final Cut', name: /^transcoded media$/i, what: 'Transcoded media', fcp: true },
 ]
