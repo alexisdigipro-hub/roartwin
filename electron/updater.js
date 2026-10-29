@@ -43,7 +43,7 @@ async function check() {
   busy = true
   try {
     send({ status: 'checking', error: '' })
-    const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'RoarTwin' } })
+    const r = await net.fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: 'application/vnd.github+json', 'User-Agent': 'RoarKit' } })
     if (!r.ok) throw new Error(`GitHub ${r.status}`)
     const d = await r.json()
     const version = (String(d.name || '').match(/(\d+\.\d+\.\d+)/) || [])[1] || ''
@@ -56,7 +56,7 @@ async function check() {
     const target = path.join(dir(), asset.name.includes(version) ? asset.name : `${version}-${asset.name}`)
     if (!(fs.existsSync(target) && fs.statSync(target).size === asset.size)) {
       send({ status: 'downloading', version, progress: 0 })
-      const res = await net.fetch(asset.browser_download_url, { headers: { 'User-Agent': 'RoarTwin' } })
+      const res = await net.fetch(asset.browser_download_url, { headers: { 'User-Agent': 'RoarKit' } })
       if (!res.ok || !res.body) throw new Error(`download ${res.status}`)
       const total = Number(res.headers.get('content-length')) || asset.size || 0
       const part = `${target}.part`

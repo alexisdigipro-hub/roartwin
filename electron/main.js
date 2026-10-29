@@ -340,7 +340,7 @@ ipcMain.handle('twin:reveal', (_e, p) => { if (known(String(p))) shell.showItemI
 ipcMain.handle('twin:open', (_e, p) => (known(String(p)) ? shell.openPath(String(p)) : ''))
 // the list as a CSV a spreadsheet opens (Excel, Numbers)
 ipcMain.handle('twin:export', async (_e, text) => {
-  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: 'RoarTwin duplicates.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] })
+  const { canceled, filePath } = await dialog.showSaveDialog(win, { defaultPath: 'RoarKit duplicates.csv', filters: [{ name: 'CSV', extensions: ['csv'] }] })
   if (canceled || !filePath) return false
   fs.writeFileSync(filePath, '﻿' + String(text), 'utf8')
   shell.showItemInFolder(filePath)
