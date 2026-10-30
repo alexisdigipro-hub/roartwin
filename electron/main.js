@@ -2,7 +2,7 @@
 // The page (app/) asks; this side walks the disk, runs the engine (engine.js, with the ffmpeg that comes inside
 // the app) and moves what the person chose to the computer's Trash. Nothing is ever deleted for good, and a group
 // always keeps at least one of its files.
-const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeTheme, net, protocol, shell, powerSaveBlocker } = require('electron')
+const { app, BrowserWindow, Menu, Notification, dialog, ipcMain, nativeTheme, net, protocol, screen, shell, powerSaveBlocker } = require('electron')
 const fs = require('fs')
 const path = require('path')
 const { pathToFileURL } = require('url')
@@ -47,20 +47,26 @@ function serveApp() {
 let win = null
 let quitting = false
 const openOutside = (url) => { if (/^(https?:|mailto:)/i.test(String(url))) shell.openExternal(url) }
+/* as RoarMail (Alex, 30 Oct): the window's buttons sit in a 40px strip above the floating columns (theme.css --mac-top) */
 const frame = process.platform === 'darwin'
-  ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 16, y: 21 } }
-  : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#16181d', symbolColor: '#eef0f3', height: 58 } }
+  ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 20, y: 13 } }
+  : { titleBarStyle: 'hidden', titleBarOverlay: { color: '#1b1e23', symbolColor: '#eef0f3', height: 40 } }
+const overlay = (light) => ({ color: light ? '#eceef1' : '#1b1e23', symbolColor: light ? '#1b1f25' : '#eef0f3', height: 40 })
+// it opens big (Alex, 30 Oct): most of the screen, up to 1600 x 1060
+function startSize() {
+  const a = screen.getPrimaryDisplay().workAreaSize
+  return { width: Math.min(1600, Math.round(a.width * 0.9)), height: Math.min(1060, Math.round(a.height * 0.92)) }
+}
 
 function open() {
   const th = savedTheme()
   nativeTheme.themeSource = th === 'auto' ? 'system' : th === 'light' ? 'light' : 'dark'
   const light = !nativeTheme.shouldUseDarkColors
-  const look = process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 } } : frame
-  /* on a Mac the side menu is the system's own frosted glass, as in the Finder and System Settings (Alex, 29 Oct: "a
-     fresher design"): the window is see-through there and the page paints only its own column */
-  const glass = process.platform === 'darwin' ? { vibrancy: 'sidebar', visualEffectState: 'followWindow', backgroundColor: '#00000000' } : { backgroundColor: light ? '#f3f4f7' : '#16181d' }
+  const look = process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: overlay(light) } : frame
+  // the page paints its own graphite backdrop behind the floating columns (RoarMail's look, 30 Oct)
+  const glass = { backgroundColor: light ? '#eceef1' : '#1b1e23' }
   win = new BrowserWindow({
-    width: 1320, height: 860, minWidth: 900, minHeight: 600, show: false, autoHideMenuBar: true, ...look, ...glass,
+    ...startSize(), minWidth: 900, minHeight: 600, show: false, autoHideMenuBar: true, ...look, ...glass,
     webPreferences: { contextIsolation: true, sandbox: true, preload: path.join(__dirname, 'preload.js') },
   })
   win.loadURL(HOME)
@@ -376,7 +382,7 @@ ipcMain.handle('twin:prefs', (_e, v) => {
   const light = !nativeTheme.shouldUseDarkColors
   try {
     paintWindow()
-    if (process.platform === 'win32') win?.setTitleBarOverlay({ color: light ? '#f3f4f7' : '#16181d', symbolColor: light ? '#15171c' : '#eef0f3', height: 58 })
+    if (process.platform === 'win32') win?.setTitleBarOverlay(overlay(light))
   } catch { /* an older window */ }
   return true
 })

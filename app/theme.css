@@ -42,7 +42,11 @@ html[data-theme="light"], html[data-theme="light"] body, html.mac[data-theme="li
 }
 body::before { display: block; content: ''; position: fixed; inset: 0; height: auto; z-index: 0; pointer-events: none;
   background: radial-gradient(520px 420px at 82% 88%, color-mix(in srgb, var(--acc) 14%, transparent) 0%, transparent 70%), radial-gradient(420px 360px at 12% 10%, rgba(255,255,255,.05) 0%, transparent 70%); }
-#app { padding: var(--gap); gap: var(--gap); grid-template-columns: 236px minmax(0, 1fr); }
+#app { padding: var(--gap); gap: var(--gap); grid-template-columns: 330px minmax(0, 1fr); }
+/* on a computer the window's buttons sit in a 40px strip above the columns, as in RoarMail (main.js trafficLightPosition / overlay) */
+html.mac, html.win { --top-strip: 40px; }
+html.mac #app, html.win #app { padding-top: var(--top-strip); }
+html.mac #app::before, html.win #app::before { height: var(--top-strip); }
 #app::before { content: ''; position: fixed; inset: 0 0 auto 0; height: var(--gap); -webkit-app-region: drag; }
 .side, .col { border: 1px solid var(--edge); border-radius: var(--R); box-shadow: var(--sh); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); overflow: hidden; }
 .side, html.mac .side, html.mac[data-theme="light"] .side { background: var(--side-m); }
@@ -51,15 +55,15 @@ body::before { display: block; content: ''; position: fixed; inset: 0; height: a
 
 /* ---------- the side: the wordmark on top, the tools as RoarMail's folders ---------- */
 .side { padding: 0 8px 12px; }
-.side .wm { justify-content: center; height: 62px; padding: 0; font-size: 18px; letter-spacing: .14em; }
-html.mac .side .wm { padding: 22px 0 0; height: 74px; }
+.side .wm { justify-content: center; height: 76px; padding: 0; font-size: 27px; letter-spacing: .14em; }
+html.mac .side .wm { padding: 0; }
 .side .wm span { font-family: var(--brand); font-weight: 300; color: var(--text); }
 .side .wm b { font-family: var(--brand); font-weight: 700; color: var(--acc-2); background: none; -webkit-background-clip: border-box; background-clip: border-box;
   text-shadow: 0 0 18px color-mix(in srgb, var(--acc) 60%, transparent); }
 .side-list { gap: 10px; padding-top: 4px; }
 .side-g { gap: 2px; }
-.side-g small { padding: 0 12px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .16em; color: var(--muted); }
-.nav { height: 34px; gap: 10px; padding: 0 12px; border: 0; border-radius: var(--r); background: none; color: var(--text); opacity: 1; font-size: 14px; font-weight: 400; transition: background .2s, transform .18s cubic-bezier(.34,1.56,.64,1); }
+.side-g small { padding: 0 14px 4px; font-size: 15px; font-weight: 600; letter-spacing: .16em; color: var(--muted); }
+.nav { height: 40px; gap: 14px; padding: 0 14px; border: 0; border-radius: var(--r); background: none; color: var(--text); opacity: 1; font-size: 21px; font-weight: 400; transition: background .2s, transform .18s cubic-bezier(.34,1.56,.64,1); }
 .nav:hover:not(:disabled) { background: var(--glass); color: var(--text); }
 .nav:active:not(:disabled) { transform: scale(.985); }
 .nav.on { font-weight: 500; }
@@ -67,18 +71,19 @@ html.mac .side .wm { padding: 22px 0 0; height: 74px; }
 html[data-theme="light"] .side-lens { background: var(--sel); box-shadow: inset 0 0 0 1px var(--sel-edge), var(--halo); }
 .side-foot { border-top-color: var(--edge); }
 .side-foot .nav.on { background: var(--sel); box-shadow: inset 0 0 0 1px var(--sel-edge), var(--halo); }
-.tile-ic { width: 20px; height: 20px; border-radius: 0; background: none; box-shadow: none; color: var(--muted); }
-.tile-ic svg { width: 19px; height: 19px; stroke-width: 1.7; }
+.tile-ic { width: 28px; height: 28px; border-radius: 0; background: none; box-shadow: none; color: var(--muted); }
+.tile-ic svg { width: 27px; height: 27px; stroke-width: 1.6; }
+.side-meta { font-size: 16px; padding: 0 14px; }
 .nav.on .tile-ic, .nav.on .tile-ic svg, .nav.on svg { color: var(--acc-2); }
-@media (max-width: 1040px) { .side .tile-ic { width: 20px; height: 20px; } }
-/* every tool fits in the side of a normal window: the rows shorten with the window */
-@media (max-height: 900px) { .nav { height: 26px; } .side-list { gap: 4px; padding-top: 0; } .side-g { gap: 1px; } .side-g small { line-height: 1.25; padding-bottom: 1px; }
-  .side .wm { height: 50px; } html.mac .side .wm { height: 62px; padding-top: 18px; } .side-foot { padding-top: 4px; gap: 2px; } }
-@media (max-height: 800px) { .nav { height: 24px; font-size: 13.5px; } .side-g small { font-size: 9.5px; } .tile-ic svg { width: 17px; height: 17px; } }
+@media (max-width: 1040px) { .side .tile-ic { width: 28px; height: 28px; } }
+/* the side's words are big (Alex, 30 Oct: "50% bigger"); in a shorter window the rows close up, and below that the
+   list scrolls inside the side */
+@media (max-height: 1000px) { .nav { height: 35px; } .side-list { gap: 5px; } .side .wm { height: 64px; } }
+@media (max-height: 860px) { .nav { height: 32px; } .side-list { gap: 4px; padding-top: 0; } .side-g { gap: 0; } .side-g small { line-height: 1.25; padding-bottom: 2px; } .side .wm { height: 56px; } .side-foot { padding-top: 4px; gap: 2px; } }
 
 /* ---------- the top row of the column: RoarMail's list head ---------- */
 .top { height: 58px; padding-left: 18px; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: 1px solid var(--edge); box-shadow: none; }
-html.win .top { padding-right: 150px; }
+html.win .top { padding-right: 16px; }
 .title { font-family: var(--font); font-size: 20px; font-weight: 600; letter-spacing: .01em; }
 .navbtns .ib { width: 30px; height: 30px; }
 
@@ -144,6 +149,7 @@ html[data-theme="light"] .switch { background: rgba(20,24,30,.12); }
 .ov-bar em { background: var(--acc-2); box-shadow: 0 0 10px color-mix(in srgb, var(--acc) 55%, transparent); }
 .ov-qb { border-radius: var(--r); background: var(--glass); }
 .ov-qb .tile-ic { width: 20px; height: 20px; color: var(--muted); }
+.ov-qb .tile-ic svg { width: 19px; height: 19px; }
 
 /* the tools' own coloured icons: one colour, as the side */
 .un-ic, .su-ic { color: var(--muted); background: var(--glass-2); border: 0; box-shadow: none; border-radius: var(--r); }
