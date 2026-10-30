@@ -1,7 +1,7 @@
 {
   "name": "roartwin",
   "productName": "RoarKit",
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "RoarKit (RoarTwin until Oct 2026): a utility of many tools for film people. The Mad Lions Lab.",
   "author": "THEMADLIONS",
   "private": true,
