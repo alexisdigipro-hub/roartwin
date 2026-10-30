@@ -20,9 +20,9 @@ dashes; the app's own text is English by default, with Greek as a choice (app.js
   (test/version.test.js); the Mac build adds Contents/MacOS/RoarTwin -> RoarKit for the 0.1.x/0.2.x updaters (adhoc-sign.js).
 - Look since 0.4.0 (Alex, 29 Oct): app/design.css on top of styles.css (tokens for light/dark, a tile colour per tool in [data-tool]); Overview is app/tools/home.js; a redraw keeps scroll positions. Keep both themes right in anything new.
 - Never delete a file: shell.trashItem only, and one file of each group always stays (checked in app.js and main.js).
-- Look since 0.6.1 (Alex, 30 Oct: "bigger icons in the side menu, and make it as Roarverter is"): app/theme.css, loaded
-  last: Roarverter/RoarMorph's graphite glass, pills, red main button, large one-colour line icons in the side menu (no
-  coloured tiles). Anything new follows it, both themes.
+- Look since 0.7.0 (Alex, 30 Oct: "RoarWriter, RoarList, RoarMorph, RoarKit exactly alike, as RoarMail"): app/theme.css,
+  loaded last, RoarMail's Simba (floating graphite glass columns, red accent that glows, the chosen thing lit from inside,
+  12px corners, Jost wordmark from app/fonts). Keep it in step with RoarMail's styles.css and RoarMorph/RoarWriter's copy.
 - Releases: bump `version` in package.json, tag `vX.Y.Z`, push the tag (.github/workflows/desktop.yml); the release's
   files are the download links and what electron/updater.js looks at.
 - Work on a branch, open a PR, wait for the green check (.github/workflows/check.yml), merge it yourself.

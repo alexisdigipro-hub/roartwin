@@ -35,6 +35,12 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.7.0 (30 Oct): RoarMail's look.** Alex: "RoarWriter, RoarList, RoarMorph, RoarKit exactly alike in design and UI, as
+RoarMail". `app/theme.css`, loaded last, is RoarMail's Simba: graphite glass columns floating on a graphite backdrop with a
+gap between them (the side and the tool's column), one red accent that glows, the chosen tool lit from inside, 12px
+corners, the main button red and glowing, a choice as a pale glowing pill, the wordmark in Jost (app/fonts, OFL). Light
+and dark. RoarMorph and RoarWriter carry the same file; RoarList already wears it.
+
 **0.6.1 (30 Oct): the look of Roarverter / RoarMorph.** Alex, after 0.6.0's "instrument": "bigger icons in the side
 menu, and make it as Roarverter is". `app/theme.css`, loaded last: Roarverter's graphite glass with the red light at the
 top, pill buttons, round icon buttons, soft glass tiles, the red main button; the side menu has large line icons in one

@@ -1,71 +1,149 @@
-/* RoarKit's look, third edition: as Roarverter / RoarMorph (Alex, 30 Oct: first "more sober and technological, without
-   many colours", then "bigger icons in the side menu, and make it as Roarverter is"). Loaded last, over styles.css, the
-   tools' sheets and design.css: it changes how things look, never what they do. Roarverter's graphite glass with the red
-   light at the top, pill buttons and round icon buttons, soft glass tiles, the red main button; the side menu has large
-   line icons in one colour (no coloured tiles), the chosen tool as lighter glass with its icon in the accent. */
+/* RoarKit's look, fourth edition: RoarMail's (Alex, 30 Oct: "RoarWriter, RoarList, RoarMorph, RoarKit exactly alike in
+   design and UI, all of them as RoarMail"). RoarMail wears RoarMe's main theme, Simba: graphite glass columns that float
+   on a soft graphite backdrop with a gap between them, one red accent that glows, the chosen thing lit from inside,
+   12px corners, the system font for reading and Jost only for the wordmark. Loaded last, over styles.css, the tools'
+   sheets and design.css: it changes how things look, never what they do. Keep it in step with RoarMail's
+   src/renderer/styles.css (the Simba block) and the same file in RoarMorph and RoarWriter. */
+
+@font-face { font-family: Jost; font-weight: 300; font-display: swap; src: url(fonts/jost-300.woff2) format('woff2'); }
+@font-face { font-family: Jost; font-weight: 700; font-display: swap; src: url(fonts/jost-700.woff2) format('woff2'); }
 
 :root, html[data-theme="dark"] {
-  --bg: #121418; --bg-2: #1a1d23; --text: #eef0f3; --muted: rgba(214,220,228,.62); --dim: rgba(214,220,228,.4);
-  --line: rgba(255,255,255,.07); --glass: rgba(255,255,255,.05); --glass-2: rgba(255,255,255,.09); --glass-3: rgba(255,255,255,.14); --edge: rgba(255,255,255,.11);
-  --tile: rgba(0,0,0,.18); --well: rgba(0,0,0,.25); --side: rgba(0,0,0,.16);
-  --lit: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 60px rgba(0,0,0,.28);
+  --bg: #1b1e23; --bg-2: #22262c; --text: #eef0f3; --muted: rgba(214,220,228,.58); --dim: rgba(214,220,228,.4);
+  --panel-m: rgba(44,49,57,.62); --side-m: rgba(58,64,74,.55); --float: rgba(40,45,53,.96);
+  --glass: rgba(255,255,255,.055); --glass-2: rgba(255,255,255,.1); --edge: rgba(255,255,255,.1); --edge-2: rgba(255,255,255,.16);
+  --line: rgba(255,255,255,.08); --tile: rgba(255,255,255,.04); --well: rgba(0,0,0,.2); --stroke: rgba(255,255,255,.16);
+  --panel: var(--float); --bar: var(--float); --side: var(--side-m); --hi: rgba(255,255,255,.08);
+  --acc-2: #ff3b30; --ok: #4ade80; --warn: #ffb224;
+  --sel: color-mix(in srgb, var(--acc) 18%, transparent); --sel-edge: color-mix(in srgb, var(--acc) 60%, transparent);
+  --halo: 0 0 24px color-mix(in srgb, var(--acc) 24%, transparent);
+  --blur: blur(26px) saturate(140%);
+  --sh: inset 0 1px 0 rgba(255,255,255,.08), 0 30px 70px rgba(0,0,0,.45);
+  --lit: none; --lift: none; --glow: transparent;
+  --r: 12px; --R: 19px; --gap: 14px;
+  --brand: Jost, Futura, 'Century Gothic', 'Avenir Next', system-ui, sans-serif;
 }
-html[data-theme="light"] { --glass-3: rgba(255,255,255,.95); }
+html[data-theme="light"] {
+  --bg: #eceef1; --bg-2: #e3e6ea; --text: #1b1f25; --muted: rgba(27,31,37,.55); --dim: rgba(27,31,37,.4);
+  --panel-m: rgba(255,255,255,.62); --side-m: rgba(255,255,255,.5); --float: rgba(255,255,255,.97);
+  --glass: rgba(20,24,30,.045); --glass-2: rgba(20,24,30,.08); --edge: rgba(20,24,30,.1); --edge-2: rgba(20,24,30,.16);
+  --line: rgba(20,24,30,.08); --tile: rgba(20,24,30,.03); --well: rgba(255,255,255,.8); --stroke: rgba(20,24,30,.2);
+  --sh: inset 0 1px 0 #fff, 0 22px 50px rgba(30,36,46,.14);
+}
+/* RoarMail's red: the chosen colour of Settings > Accent, red by default */
+html[data-accent="red"] { --acc: #d40000; --acc-2: #ff3b30; }
 
-/* ---------- the ground: Roarverter's red light at the top ---------- */
-.col::before { height: 520px;
-  background: radial-gradient(50% 60% at 30% 0%, color-mix(in srgb, var(--acc) 13%, transparent), transparent 70%), radial-gradient(40% 50% at 85% 10%, color-mix(in srgb, var(--acc) 6%, transparent), transparent 70%); }
-html[data-theme="light"] .col::before { opacity: .6; }
+/* ---------- the backdrop and the floating columns ---------- */
+html, body, html.mac, html.mac body {
+  background: radial-gradient(1200px 700px at 50% -12%, #4b525d 0%, transparent 62%), linear-gradient(180deg, #2b3038 0%, #1c1f24 55%, #15171b 100%);
+}
+html[data-theme="light"], html[data-theme="light"] body, html.mac[data-theme="light"], html.mac[data-theme="light"] body {
+  background: radial-gradient(1200px 700px at 50% -12%, #ffffff 0%, transparent 62%), linear-gradient(180deg, #f1f2f4 0%, #e3e6ea 100%);
+}
+body::before { display: block; content: ''; position: fixed; inset: 0; height: auto; z-index: 0; pointer-events: none;
+  background: radial-gradient(520px 420px at 82% 88%, color-mix(in srgb, var(--acc) 14%, transparent) 0%, transparent 70%), radial-gradient(420px 360px at 12% 10%, rgba(255,255,255,.05) 0%, transparent 70%); }
+#app { padding: var(--gap); gap: var(--gap); grid-template-columns: 236px minmax(0, 1fr); }
+#app::before { content: ''; position: fixed; inset: 0 0 auto 0; height: var(--gap); -webkit-app-region: drag; }
+.side, .col { border: 1px solid var(--edge); border-radius: var(--R); box-shadow: var(--sh); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); overflow: hidden; }
+.side, html.mac .side, html.mac[data-theme="light"] .side { background: var(--side-m); }
+.col { background: var(--panel-m); }
+.col::before { display: none; }
 
-/* ---------- the side menu: big line icons in one colour ---------- */
-.side .wm b { background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; }
-.side-list { gap: 12px; }
-.side-g small { font-size: 11px; font-weight: 650; letter-spacing: .09em; }
-.nav { height: 38px; gap: 12px; padding: 0 10px; border-radius: 999px; font-size: 14px; font-weight: 500; opacity: 1; color: var(--muted); }
+/* ---------- the side: the wordmark on top, the tools as RoarMail's folders ---------- */
+.side { padding: 0 8px 12px; }
+.side .wm { justify-content: center; height: 62px; padding: 0; font-size: 18px; letter-spacing: .14em; }
+html.mac .side .wm { padding: 22px 0 0; height: 74px; }
+.side .wm span { font-family: var(--brand); font-weight: 300; color: var(--text); }
+.side .wm b { font-family: var(--brand); font-weight: 700; color: var(--acc-2); background: none; -webkit-background-clip: border-box; background-clip: border-box;
+  text-shadow: 0 0 18px color-mix(in srgb, var(--acc) 60%, transparent); }
+.side-list { gap: 10px; padding-top: 4px; }
+.side-g { gap: 2px; }
+.side-g small { padding: 0 12px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .16em; color: var(--muted); }
+.nav { height: 34px; gap: 10px; padding: 0 12px; border: 0; border-radius: var(--r); background: none; color: var(--text); opacity: 1; font-size: 14px; font-weight: 400; transition: background .2s, transform .18s cubic-bezier(.34,1.56,.64,1); }
 .nav:hover:not(:disabled) { background: var(--glass); color: var(--text); }
-.nav.on { color: var(--text); font-weight: 600; }
-.side-lens { border-radius: 999px; background: var(--glass-3); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 2px 8px rgba(0,0,0,.25); }
-html[data-theme="light"] .side-lens { background: #fff; box-shadow: 0 1px 2px rgba(20,24,40,.1), 0 4px 12px rgba(20,24,40,.06); }
-.side-foot .nav.on { background: var(--glass-3); }
-.tile-ic { width: 24px; height: 24px; border-radius: 0; background: none; box-shadow: none; color: inherit; }
-.tile-ic svg { width: 22px; height: 22px; stroke-width: 1.7; }
-.nav.on .tile-ic, .nav.on .tile-ic svg { color: var(--acc); }
-@media (max-width: 1040px) { .side .tile-ic { width: 24px; height: 24px; } }
-/* every tool still fits in the side menu of a normal window: rows shorten with the window, the icons stay big */
-@media (max-height: 1000px) { .nav { height: 34px; } .side-list { gap: 9px; } }
-@media (max-height: 900px) { .nav { height: 28px; } .side-list { gap: 4px; } .side-g small { padding-bottom: 1px; line-height: 1.3; } }
-@media (max-height: 800px) { .nav { height: 25px; } .side-g small { font-size: 10px; } .tile-ic svg { width: 20px; height: 20px; } }
+.nav:active:not(:disabled) { transform: scale(.985); }
+.nav.on { font-weight: 500; }
+.side-lens { border-radius: var(--r); background: var(--sel); box-shadow: inset 0 0 0 1px var(--sel-edge), var(--halo); }
+html[data-theme="light"] .side-lens { background: var(--sel); box-shadow: inset 0 0 0 1px var(--sel-edge), var(--halo); }
+.side-foot { border-top-color: var(--edge); }
+.side-foot .nav.on { background: var(--sel); box-shadow: inset 0 0 0 1px var(--sel-edge), var(--halo); }
+.tile-ic { width: 20px; height: 20px; border-radius: 0; background: none; box-shadow: none; color: var(--muted); }
+.tile-ic svg { width: 19px; height: 19px; stroke-width: 1.7; }
+.nav.on .tile-ic, .nav.on .tile-ic svg, .nav.on svg { color: var(--acc-2); }
+@media (max-width: 1040px) { .side .tile-ic { width: 20px; height: 20px; } }
+/* every tool fits in the side of a normal window: the rows shorten with the window */
+@media (max-height: 900px) { .nav { height: 26px; } .side-list { gap: 4px; padding-top: 0; } .side-g { gap: 1px; } .side-g small { line-height: 1.25; padding-bottom: 1px; }
+  .side .wm { height: 50px; } html.mac .side .wm { height: 62px; padding-top: 18px; } .side-foot { padding-top: 4px; gap: 2px; } }
+@media (max-height: 800px) { .nav { height: 24px; font-size: 13.5px; } .side-g small { font-size: 9.5px; } .tile-ic svg { width: 17px; height: 17px; } }
 
-/* ---------- headings: Roarverter's thin and bold, no gradient ---------- */
+/* ---------- the top row of the column: RoarMail's list head ---------- */
+.top { height: 58px; padding-left: 18px; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; border-bottom: 1px solid var(--edge); box-shadow: none; }
+html.win .top { padding-right: 150px; }
+.title { font-family: var(--font); font-size: 20px; font-weight: 600; letter-spacing: .01em; }
+.navbtns .ib { width: 30px; height: 30px; }
+
+/* ---------- headings ---------- */
 .hero h1 b, .ov-head h1 b { background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; }
-.ov-quick h3, .set-g h3, .ov-tile small { font-size: 11px; font-weight: 650; letter-spacing: .09em; color: var(--dim); }
+.ov-quick h3, .set-g h3, .ov-tile small, .ov-head small { font-size: 10.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); }
+.ov-head small { text-transform: none; letter-spacing: .02em; font-size: 12.5px; }
 
-/* ---------- buttons: pills and round icons; the main one red, as Roarverter's Convert ---------- */
-.btn.main { background: linear-gradient(135deg, var(--acc), color-mix(in srgb, var(--acc) 82%, #000)); border-color: transparent; color: #fff; font-weight: 650;
-  box-shadow: 0 12px 30px color-mix(in srgb, var(--acc) 32%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
-.btn.main::after { display: none; }
-.btn:hover:not(:disabled), .btn.main:hover:not(:disabled) { transform: none; }
-.btn:not(.main):hover:not(:disabled) { box-shadow: none; }
-.btn.main:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 14px 34px color-mix(in srgb, var(--acc) 40%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+/* ---------- controls: graphite glass, 12px corners, the main one red and glowing ---------- */
+.btn { height: 36px; padding: 0 16px; border: 0; border-radius: var(--r); background: var(--glass); box-shadow: inset 0 0 0 1px var(--edge); font-weight: 600; }
+.btn:hover:not(:disabled) { background: var(--glass-2); transform: none; box-shadow: inset 0 0 0 1px var(--edge); }
+.btn:active:not(:disabled) { transform: scale(.96); }
 .btn:hover:not(:disabled) svg { transform: none; }
-.ib { color: var(--muted); }
-.ib:hover:not(:disabled) { background: var(--glass-3); color: var(--text); transform: none; }
-.seg { background: var(--well); }
-.seg .lens { background: var(--glass-3); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 2px 8px rgba(0,0,0,.25); }
-html[data-theme="light"] .seg .lens { background: #fff; box-shadow: 0 1px 2px rgba(20,24,40,.12); }
-.switch.on { background: var(--acc); box-shadow: none; }
-
-/* ---------- tiles: soft glass ---------- */
-.opts, .group, .ov-hero, .ov-card, .ov-tile { background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025)); }
-html[data-theme="light"] .opts, html[data-theme="light"] .group, html[data-theme="light"] .ov-hero, html[data-theme="light"] .ov-card, html[data-theme="light"] .ov-tile { background: var(--glass); }
-.ov-hero::after { display: none; }
-.ov-card:hover, .ov-tile:hover, .ov-qb:hover { transform: none; }
-.ov-ic { border: 1px solid var(--edge); }
-.ov-ring .p { filter: none; }
-.ov-qb .tile-ic { width: 22px; height: 22px; color: var(--muted); }
-.ov-qb .tile-ic svg { width: 20px; height: 20px; }
-.ov-bar em { background: var(--acc); }
+.btn.main { background: var(--acc); color: #fff; box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 60%, transparent), 0 6px 24px color-mix(in srgb, var(--acc) 45%, transparent); }
+.btn.main::after { display: none; }
+.btn.main:hover:not(:disabled) { background: var(--acc); filter: brightness(1.08); box-shadow: 0 0 0 1px color-mix(in srgb, var(--acc) 60%, transparent), 0 8px 28px color-mix(in srgb, var(--acc) 55%, transparent); }
+.btn.big { height: 46px; padding: 0 26px; border-radius: var(--r); font-size: 15px; }
+.ib { border: 0; border-radius: var(--r); background: transparent; color: var(--muted); }
+.ib:hover:not(:disabled) { background: var(--glass-2); color: var(--text); transform: none; }
+.ib:active:not(:disabled) { transform: scale(.92); }
+/* a choice: the dark well, the chosen one a pale glowing pill */
+.seg { padding: 3px; border: 0; border-radius: 999px; background: rgba(0,0,0,.25); box-shadow: inset 0 0 0 1px var(--edge); }
+html[data-theme="light"] .seg { background: rgba(20,24,30,.06); }
+.seg button { font-size: 13px; }
+.seg button.on { color: #2a1410; }
+.seg .lens { background: linear-gradient(180deg, color-mix(in srgb, var(--acc) 38%, #fff), color-mix(in srgb, var(--acc) 70%, #fff)); box-shadow: 0 0 20px color-mix(in srgb, var(--acc) 50%, transparent); }
+html[data-theme="light"] .seg .lens { box-shadow: 0 0 14px color-mix(in srgb, var(--acc) 35%, transparent); }
+.switch { border: 0; background: rgba(0,0,0,.3); box-shadow: inset 0 0 0 1px var(--edge); }
+html[data-theme="light"] .switch { background: rgba(20,24,30,.12); }
+.switch.on, html[data-theme="light"] .switch.on { background: var(--acc); box-shadow: 0 0 12px color-mix(in srgb, var(--acc) 50%, transparent); }
+.check.on { background: var(--acc); border-color: var(--acc); }
+:focus-visible { outline: 2px solid color-mix(in srgb, var(--acc) 70%, transparent); outline-offset: 2px; border-radius: var(--r); }
+.nf input, .set-in { border: 0; border-radius: var(--r); background: var(--well); box-shadow: inset 0 0 0 1px var(--edge); }
+.nf input:focus, .set-in:focus { box-shadow: inset 0 0 0 1px var(--sel-edge), 0 0 0 4px color-mix(in srgb, var(--acc) 16%, transparent); }
+.chip { border-radius: var(--r); }
 .chip.tint { background: var(--glass); border-color: var(--edge); }
+.chip i { box-shadow: 0 0 8px var(--c, var(--acc)); }
 
-/* the tools' own coloured icons: one colour too */
-.un-ic, .su-ic { color: var(--muted); background: var(--glass); border: 1px solid var(--edge); box-shadow: none; }
+/* ---------- tiles and cards: glass with 12px and 19px corners; the chosen one lit from inside ---------- */
+.opts, .group, .drop, .ov-hero, .ov-cards, .ov-tile { border-radius: var(--R); }
+.opts, .group, .ov-hero, .ov-card, .ov-tile { background: var(--glass); border: 1px solid var(--edge); box-shadow: none; }
+.drop { background: var(--glass); border: 1.5px dashed var(--edge-2); }
+.drop.over { border-color: var(--sel-edge); background: var(--sel); box-shadow: var(--halo); transform: none; }
+.drop .dz-i { border-radius: var(--r); background: var(--glass-2); border: 0; }
+.file { border-radius: var(--r); background: var(--glass); }
+.file.sel { background: var(--sel); border-color: var(--sel-edge); box-shadow: var(--halo); }
+.opt.cl { border-radius: var(--r); background: var(--glass); }
+.opt.cl.on { background: var(--sel); border-color: var(--sel-edge); }
+.sheet { border-radius: calc(var(--R) + 4px); background: var(--float); border-color: var(--edge-2); box-shadow: var(--sh); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.veil { background: rgba(10,12,15,.45); }
+.toast, .foot { background: var(--float); border-color: var(--edge-2); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.toast { border-radius: 999px; }
+.verdict .big-i, .empty .big-i { border-radius: var(--R); }
+
+/* ---------- Overview: RoarMail's rows with a colour bar ---------- */
+.ov-hero::after { display: none; }
+.ov-card { border-radius: var(--r); }
+.ov-card:hover, .ov-tile:hover, .ov-qb:hover { transform: none; background: var(--glass-2); }
+.ov-card::before { left: 4px; top: 14px; bottom: 14px; width: 3px; border-radius: 3px; }
+.ov-ic { border-radius: var(--r); }
+.ov-ring .p { stroke: var(--acc-2); filter: drop-shadow(0 0 8px color-mix(in srgb, var(--acc) 60%, transparent)); }
+.ov-bar { background: rgba(0,0,0,.25); }
+.ov-bar em { background: var(--acc-2); box-shadow: 0 0 10px color-mix(in srgb, var(--acc) 55%, transparent); }
+.ov-qb { border-radius: var(--r); background: var(--glass); }
+.ov-qb .tile-ic { width: 20px; height: 20px; color: var(--muted); }
+
+/* the tools' own coloured icons: one colour, as the side */
+.un-ic, .su-ic { color: var(--muted); background: var(--glass-2); border: 0; box-shadow: none; border-radius: var(--r); }
