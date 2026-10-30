@@ -35,11 +35,11 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
-**0.6.0 (30 Oct): a new look, the instrument.** Alex: "more sober and technological, without many colours". Near-black
-graphite (paper grey in light), hairlines instead of glass, small corners, line icons without coloured tiles, figures and
-labels in a monospace, a faint grid at the top of the page, short movements without bounce. The main button is white on
-black (black on white in light); the accent colour is only a signal: the chosen tool's mark, the rings, the warnings.
-All of it is `app/theme.css`, loaded last; nothing a tool does changed.
+**0.6.1 (30 Oct): the look of Roarverter / RoarMorph.** Alex, after 0.6.0's "instrument": "bigger icons in the side
+menu, and make it as Roarverter is". `app/theme.css`, loaded last: Roarverter's graphite glass with the red light at the
+top, pill buttons, round icon buttons, soft glass tiles, the red main button; the side menu has large line icons in one
+colour (no coloured tiles), the chosen tool as lighter glass with its icon in the accent. The rows shorten with the
+window's height so every tool still fits. Nothing a tool does changed.
 
 **0.5.0 (29 Oct): Uninstall apps, Startup items, the menu bar, Do by itself, Similar photos.**
 - **Uninstall apps** (Computer): every app with its version, size and the last time it was opened (Mac: /Applications,
