@@ -1,200 +1,71 @@
-/* RoarKit's look, third edition: the instrument (Alex, 30 Oct: "more sober and technological, without many colours,
-   see it completely differently"). Loaded last, over styles.css, the tools' sheets and design.css: it changes how
-   things look and move, never what they do. Near-black graphite (light: paper grey), hairlines instead of glass,
-   small corners, monochrome icons, figures and labels in a monospace, no glow and no gradient. The accent is a
-   signal, not a paint: the chosen tool's mark, a ring, a tick, a focus. The main button is plain white on black
-   (black on white in light). Light and dark both through the tokens. */
+/* RoarKit's look, third edition: as Roarverter / RoarMorph (Alex, 30 Oct: first "more sober and technological, without
+   many colours", then "bigger icons in the side menu, and make it as Roarverter is"). Loaded last, over styles.css, the
+   tools' sheets and design.css: it changes how things look, never what they do. Roarverter's graphite glass with the red
+   light at the top, pill buttons and round icon buttons, soft glass tiles, the red main button; the side menu has large
+   line icons in one colour (no coloured tiles), the chosen tool as lighter glass with its icon in the accent. */
 
 :root, html[data-theme="dark"] {
-  --bg: #0b0c0e; --bg-2: #111215; --text: #e7e8ea; --muted: #8b8e95; --dim: #5d6067;
-  --line: rgba(255,255,255,.07); --glass: #121316; --glass-2: #1a1b1f; --edge: rgba(255,255,255,.09);
-  --tile: #0f1013; --well: #08090a; --panel: #141518; --bar: rgba(20,21,24,.94);
-  --stroke: rgba(255,255,255,.16); --hi: transparent; --side: #0d0e10; --veil: rgba(0,0,0,.62); --shadow: rgba(0,0,0,.5);
-  --glow: transparent; --lit: none; --lift: none;
-  --ok: #4fbf7a; --warn: #d9a441;
-  --ink: #e7e8ea; --ink-on: #0b0c0e;
-  --mono: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
-  --font-display: var(--font);
-  --r-card: 10px; --r-tile: 8px;
-  --soft: cubic-bezier(.2, .7, .2, 1); --spring: var(--soft); --ease: var(--soft);
+  --bg: #121418; --bg-2: #1a1d23; --text: #eef0f3; --muted: rgba(214,220,228,.62); --dim: rgba(214,220,228,.4);
+  --line: rgba(255,255,255,.07); --glass: rgba(255,255,255,.05); --glass-2: rgba(255,255,255,.09); --glass-3: rgba(255,255,255,.14); --edge: rgba(255,255,255,.11);
+  --tile: rgba(0,0,0,.18); --well: rgba(0,0,0,.25); --side: rgba(0,0,0,.16);
+  --lit: inset 0 1px 0 rgba(255,255,255,.07), 0 24px 60px rgba(0,0,0,.28);
 }
-html[data-theme="light"] {
-  --bg: #f2f2f3; --bg-2: #ebebec; --text: #141518; --muted: #63666d; --dim: #95989e;
-  --line: rgba(0,0,0,.08); --glass: #ffffff; --glass-2: #f6f6f7; --edge: rgba(0,0,0,.1);
-  --tile: #f7f7f8; --well: #e9e9eb; --panel: #ffffff; --bar: rgba(255,255,255,.96);
-  --stroke: rgba(0,0,0,.2); --side: #ebebed; --veil: rgba(20,21,24,.28); --shadow: rgba(20,21,24,.16);
-  --ok: #2e8f55; --warn: #a87414;
-  --ink: #141518; --ink-on: #ffffff;
-}
-/* the accents, toned down to signal colours */
-html[data-accent="red"] { --acc: #e5483d; }
-html[data-accent="orange"] { --acc: #e07a2e; }
-html[data-accent="pink"] { --acc: #e04466; }
-html[data-accent="purple"] { --acc: #8f6ae0; }
-html[data-accent="blue"] { --acc: #3d8ae5; }
-html[data-accent="green"] { --acc: #3fa66a; }
+html[data-theme="light"] { --glass-3: rgba(255,255,255,.95); }
 
-/* ---------- the ground: flat, with a faint measuring grid at the top of the column ---------- */
-html.mac .side { background: color-mix(in srgb, var(--side) 82%, transparent); }
-html.mac[data-theme="light"] .side { background: color-mix(in srgb, var(--side) 86%, transparent); }
-.col::before { height: 280px; opacity: .55;
-  background: linear-gradient(var(--line) 1px, transparent 1px) 0 0 / 24px 24px, linear-gradient(90deg, var(--line) 1px, transparent 1px) 0 0 / 24px 24px;
-  -webkit-mask-image: linear-gradient(180deg, #000, transparent); mask-image: linear-gradient(180deg, #000, transparent); }
-html[data-theme="light"] .col::before { opacity: .7; }
-.ov-hero::after { display: none; }
+/* ---------- the ground: Roarverter's red light at the top ---------- */
+.col::before { height: 520px;
+  background: radial-gradient(50% 60% at 30% 0%, color-mix(in srgb, var(--acc) 13%, transparent), transparent 70%), radial-gradient(40% 50% at 85% 10%, color-mix(in srgb, var(--acc) 6%, transparent), transparent 70%); }
+html[data-theme="light"] .col::before { opacity: .6; }
 
-/* ---------- the side menu: monochrome, the chosen tool marked by a thin line ---------- */
-.side { padding: 0 10px 12px; }
-.side .wm { font-family: var(--mono); font-size: 13px; letter-spacing: .22em; }
-.side .wm span { font-weight: 400; color: var(--muted); }
-.side .wm b { background: none; color: var(--text); font-weight: 700; -webkit-background-clip: border-box; background-clip: border-box; }
-.side-g small { font-family: var(--mono); font-size: 10px; font-weight: 500; letter-spacing: .14em; color: var(--dim); }
-.nav { border-radius: 6px; color: var(--muted); opacity: 1; font-weight: 450; transition: background .15s, color .15s; }
-.nav:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 5%, transparent); color: var(--text); }
-.nav:active:not(:disabled) { transform: none; }
-.nav.on { color: var(--text); font-weight: 550; }
-.nav.on svg { color: currentColor; }
-.side-lens { border-radius: 6px; background: color-mix(in srgb, var(--text) 7%, transparent); box-shadow: inset 2px 0 0 var(--acc); transition: transform .28s var(--soft), height .2s var(--soft), opacity .15s; }
-html[data-theme="light"] .side-lens { background: #fff; box-shadow: inset 2px 0 0 var(--acc), 0 0 0 1px var(--line); }
-.side-foot .nav.on { background: color-mix(in srgb, var(--text) 7%, transparent); box-shadow: inset 2px 0 0 var(--acc); }
-.side-meta { font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em; }
+/* ---------- the side menu: big line icons in one colour ---------- */
+.side .wm b { background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; }
+.side-list { gap: 12px; }
+.side-g small { font-size: 11px; font-weight: 650; letter-spacing: .09em; }
+.nav { height: 38px; gap: 12px; padding: 0 10px; border-radius: 999px; font-size: 14px; font-weight: 500; opacity: 1; color: var(--muted); }
+.nav:hover:not(:disabled) { background: var(--glass); color: var(--text); }
+.nav.on { color: var(--text); font-weight: 600; }
+.side-lens { border-radius: 999px; background: var(--glass-3); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 2px 8px rgba(0,0,0,.25); }
+html[data-theme="light"] .side-lens { background: #fff; box-shadow: 0 1px 2px rgba(20,24,40,.1), 0 4px 12px rgba(20,24,40,.06); }
+.side-foot .nav.on { background: var(--glass-3); }
+.tile-ic { width: 24px; height: 24px; border-radius: 0; background: none; box-shadow: none; color: inherit; }
+.tile-ic svg { width: 22px; height: 22px; stroke-width: 1.7; }
+.nav.on .tile-ic, .nav.on .tile-ic svg { color: var(--acc); }
+@media (max-width: 1040px) { .side .tile-ic { width: 24px; height: 24px; } }
+/* every tool still fits in the side menu of a normal window: rows shorten with the window, the icons stay big */
+@media (max-height: 1000px) { .nav { height: 34px; } .side-list { gap: 9px; } }
+@media (max-height: 900px) { .nav { height: 28px; } .side-list { gap: 4px; } .side-g small { padding-bottom: 1px; line-height: 1.3; } }
+@media (max-height: 800px) { .nav { height: 25px; } .side-g small { font-size: 10px; } .tile-ic svg { width: 20px; height: 20px; } }
 
-/* the tools' icons: line icons in the text's colour, no coloured tiles */
-.tile-ic { width: 18px; height: 18px; border-radius: 0; background: none; box-shadow: none; color: inherit; }
-.tile-ic svg { width: 16px; height: 16px; stroke-width: 1.6; }
-@media (max-width: 1040px) { .side .tile-ic { width: 18px; height: 18px; } }
+/* ---------- headings: Roarverter's thin and bold, no gradient ---------- */
+.hero h1 b, .ov-head h1 b { background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; }
+.ov-quick h3, .set-g h3, .ov-tile small { font-size: 11px; font-weight: 650; letter-spacing: .09em; color: var(--dim); }
 
-/* ---------- the top row ---------- */
-.top { background: color-mix(in srgb, var(--bg) 88%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
-.title { font-size: 15px; font-weight: 600; letter-spacing: 0; }
-.navbtns .ib { border-radius: 6px; }
-
-/* ---------- headings: quieter, no gradient ---------- */
-.hero h1 { font-size: clamp(30px, 3.6vw, 42px); font-weight: 400; letter-spacing: -.025em; line-height: 1.08; }
-.hero h1 b { font-weight: 600; background: none; color: var(--text); -webkit-background-clip: border-box; background-clip: border-box; }
-.hero p { font-size: 14px; }
-.ov-head h1 { font-size: clamp(24px, 2.6vw, 32px); font-weight: 400; letter-spacing: -.02em; }
-.ov-head h1 b { font-weight: 600; }
-.verdict h2 { font-weight: 400; } .verdict h2 b { font-weight: 600; }
-.ov-head small, .ov-tile small, .ov-quick h3, .set-g h3 { font-family: var(--mono); font-size: 10.5px; font-weight: 500; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
-.ov-head small { text-transform: none; letter-spacing: .04em; }
-
-/* ---------- buttons: square-cornered, flat, precise ---------- */
-.btn { height: 32px; padding: 0 14px; border-radius: 7px; background: var(--glass); border-color: var(--edge); font-weight: 500; font-size: 13px; transition: background .15s, border-color .15s, color .15s; }
-.btn:hover:not(:disabled) { transform: none; box-shadow: none; background: var(--glass-2); border-color: var(--stroke); }
-.btn:active:not(:disabled) { transform: translateY(1px); }
-.btn svg { width: 15px; height: 15px; }
-.btn:hover:not(:disabled) svg { transform: none; }
-.btn.main { background: var(--ink); border-color: var(--ink); color: var(--ink-on); box-shadow: none; filter: none; }
+/* ---------- buttons: pills and round icons; the main one red, as Roarverter's Convert ---------- */
+.btn.main { background: linear-gradient(135deg, var(--acc), color-mix(in srgb, var(--acc) 82%, #000)); border-color: transparent; color: #fff; font-weight: 650;
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--acc) 32%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
 .btn.main::after { display: none; }
-.btn.main:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 86%, var(--bg)); border-color: transparent; box-shadow: none; }
-.btn.big { height: 42px; padding: 0 22px; border-radius: 8px; font-size: 14px; }
-.ib { border-radius: 7px; background: var(--glass); }
-.ib:hover:not(:disabled) { transform: none; background: var(--glass-2); }
-.ib:active:not(:disabled) { transform: translateY(1px); }
-:focus-visible { outline: 1px solid var(--acc); outline-offset: 2px; border-radius: 6px; }
+.btn:hover:not(:disabled), .btn.main:hover:not(:disabled) { transform: none; }
+.btn:not(.main):hover:not(:disabled) { box-shadow: none; }
+.btn.main:hover:not(:disabled) { filter: brightness(1.08); box-shadow: 0 14px 34px color-mix(in srgb, var(--acc) 40%, transparent), inset 0 1px 0 rgba(255,255,255,.25); }
+.btn:hover:not(:disabled) svg { transform: none; }
+.ib { color: var(--muted); }
+.ib:hover:not(:disabled) { background: var(--glass-3); color: var(--text); transform: none; }
+.seg { background: var(--well); }
+.seg .lens { background: var(--glass-3); box-shadow: inset 0 1px 0 rgba(255,255,255,.14), 0 2px 8px rgba(0,0,0,.25); }
+html[data-theme="light"] .seg .lens { background: #fff; box-shadow: 0 1px 2px rgba(20,24,40,.12); }
+.switch.on { background: var(--acc); box-shadow: none; }
 
-/* the segment and the switch: monochrome */
-.seg { border-radius: 8px; padding: 2px; }
-.seg button { height: 28px; border-radius: 6px; font-size: 13px; }
-.seg .lens { top: 2px; bottom: 2px; border-radius: 6px; background: var(--glass-2); box-shadow: 0 0 0 1px var(--edge); transition: left .25s var(--soft), width .25s var(--soft); }
-html[data-theme="light"] .seg .lens { background: #fff; box-shadow: 0 0 0 1px var(--edge), 0 1px 2px rgba(0,0,0,.06); }
-.switch { width: 38px; height: 22px; border-radius: 6px; }
-.switch::after { top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 4px; box-shadow: none; background: var(--muted); transition: transform .2s var(--soft), background .2s; }
-.switch.on { background: var(--ink); box-shadow: none; }
-.switch.on::after { transform: translateX(16px); background: var(--ink-on); }
-.switch:active::after { width: 16px; }
-.switch.on:active::after { transform: translateX(16px); }
-.check { border-radius: 4px; border-width: 1px; }
-.check.on { background: var(--ink); border-color: var(--ink); color: var(--ink-on); }
-.swatch { border-radius: 5px; width: 22px; height: 22px; box-shadow: inset 0 0 0 2px var(--bg); }
+/* ---------- tiles: soft glass ---------- */
+.opts, .group, .ov-hero, .ov-card, .ov-tile { background: linear-gradient(180deg, rgba(255,255,255,.055), rgba(255,255,255,.025)); }
+html[data-theme="light"] .opts, html[data-theme="light"] .group, html[data-theme="light"] .ov-hero, html[data-theme="light"] .ov-card, html[data-theme="light"] .ov-tile { background: var(--glass); }
+.ov-hero::after { display: none; }
+.ov-card:hover, .ov-tile:hover, .ov-qb:hover { transform: none; }
+.ov-ic { border: 1px solid var(--edge); }
+.ov-ring .p { filter: none; }
+.ov-qb .tile-ic { width: 22px; height: 22px; color: var(--muted); }
+.ov-qb .tile-ic svg { width: 20px; height: 20px; }
+.ov-bar em { background: var(--acc); }
+.chip.tint { background: var(--glass); border-color: var(--edge); }
 
-/* ---------- cards, tiles, fields: hairlines, small corners, no lift ---------- */
-.opts, .group, .drop { border-radius: var(--r-card); }
-.opts, .group { background: var(--glass); box-shadow: none; }
-.opts { gap: 0; padding: 4px 16px; }
-.opts > .opt + .opt { border-top: 1px solid var(--line); }
-.opt { min-height: 52px; padding: 8px 0; }
-.opt b { font-weight: 550; }
-.opt small { font-size: 12.5px; }
-.drop { background: transparent; border: 1px dashed var(--stroke); }
-.drop:hover { border-color: var(--muted); }
-.drop.over { transform: none; border-color: var(--acc); background: color-mix(in srgb, var(--acc) 5%, transparent); box-shadow: none; }
-.drop .dz-i { border-radius: 8px; width: 44px; height: 44px; }
-.drop .dz-i svg { width: 22px; height: 22px; stroke-width: 1.6; }
-.drop:hover .dz-i, .drop.over .dz-i { transform: none; }
-.file { border-radius: 8px; }
-.file.sel { background: color-mix(in srgb, var(--text) 6%, var(--tile)); border-color: var(--stroke); }
-.chip { height: 24px; padding: 0 9px; border-radius: 5px; font-size: 12px; background: transparent; }
-.chip i { width: 6px; height: 6px; border-radius: 1px; }
-.chip.tint { background: transparent; border-color: var(--edge); color: var(--text); }
-a.chip:hover, button.chip:hover:not(:disabled) { transform: none; background: var(--glass-2); }
-.nf input, .set-in { border-radius: 7px; height: 34px; }
-.nf input:focus, .set-in:focus { border-color: var(--muted); }
-.sheet { border-radius: 12px; padding: 20px; box-shadow: 0 24px 60px var(--shadow); }
-.toast { border-radius: 8px; font-size: 13px; }
-.foot { border-radius: 10px; }
-.verdict .big-i { border-radius: 10px; }
-
-/* figures: monospace, tabular */
-.ring b, .ov-ring b, .ov-tile b, .foot b, .seg button small { font-family: var(--mono); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.ring circle { stroke-width: 3; }
-.ring .p { stroke-linecap: butt; }
-
-/* ---------- Overview ---------- */
-.ov { gap: 16px; }
-.ov-hero { border-radius: 12px; background: var(--glass); box-shadow: none; padding: 24px 28px; }
-.ov-ring { width: 116px; height: 116px; }
-.ov-ring circle { stroke-width: 4; }
-.ov-ring .p { stroke-linecap: butt; filter: none; }
-.ov-ring b { font-size: 34px; font-weight: 400; }
-.ov-cards { gap: 0; border: 1px solid var(--edge); border-radius: 12px; background: var(--glass); overflow: hidden; }
-.ov-card { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 14px 16px; }
-.ov-card + .ov-card { border-top: 1px solid var(--line); }
-.ov-card:hover { transform: none; background: color-mix(in srgb, var(--text) 3%, transparent); }
-.ov-card::before { left: 16px; top: 50%; bottom: auto; width: 6px; height: 6px; margin-top: -3px; border-radius: 1px; }
-.ov-ic { width: 32px; height: 32px; margin-left: 14px; border-radius: 7px; color: var(--muted); background: none; border: 1px solid var(--edge); }
-.ov-ic svg { width: 16px; height: 16px; stroke-width: 1.6; }
-.ov-txt b { font-weight: 550; }
-.ov-tiles { gap: 0; border: 1px solid var(--edge); border-radius: 12px; background: var(--glass); overflow: hidden; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
-.ov-tile { border: 0; border-radius: 0; background: none; box-shadow: none; padding: 16px 18px; box-shadow: -1px 0 0 var(--line); }
-.ov-tile:hover { transform: none; background: color-mix(in srgb, var(--text) 3%, transparent); }
-.ov-tile b { font-size: 24px; font-weight: 400; }
-.ov-bar { height: 2px; border-radius: 0; margin-top: 10px; }
-.ov-bar em { border-radius: 0; background: var(--text); opacity: .75; }
-.ov-q { gap: 8px; }
-.ov-qb { border-radius: 8px; padding: 10px 12px; background: transparent; font-weight: 500; }
-.ov-qb:hover { transform: none; background: var(--glass-2); }
-.ov-qb .tile-ic { width: 18px; height: 18px; border-radius: 0; color: var(--muted); }
-.ov-qb .tile-ic svg { width: 16px; height: 16px; }
-
-/* the tools' own bars: one quiet colour */
-.sp-bar i, .st-cores i { background: var(--text) !important; opacity: .7; }
-.st-cores i { background: linear-gradient(to top, color-mix(in srgb, var(--text) 70%, transparent) calc(var(--v) * 100%), var(--well) calc(var(--v) * 100%)) !important; opacity: 1; }
-.dh-bar i, .st-bar i { background: color-mix(in srgb, var(--text) 70%, transparent); border-radius: 0; }
-.dh-bar.low i { background: var(--acc); }
-.dh-bar, .st-bar { border-radius: 0; }
-.spark.ok .l, .spark.acc .l { stroke: var(--text); } .spark.ok .a, .spark.acc .a { fill: color-mix(in srgb, var(--text) 8%, transparent); }
-.sp-curve .l { stroke: var(--text); } .sp-curve .a { fill: color-mix(in srgb, var(--text) 8%, transparent); }
-.sp-g .p { stroke: var(--text); }
-.sp-g.on { border-color: var(--stroke); }
-.dh.bad { background: var(--glass); }
-
-/* ---------- movement: short and exact, no bounce, no blur ---------- */
-@keyframes rise { from { opacity: 0; transform: translateY(6px); } }
-@keyframes sink { from { opacity: 0; transform: translateY(-6px); } }
-@keyframes up-in { from { opacity: 0; transform: translateY(4px); } }
-@keyframes pop2 { from { opacity: 0; transform: scale(.98); } }
-main.enter > * { animation-duration: .28s; }
-main.enter .card > *, main.enter .res > *, main.enter .ov > *, main.enter .ov-cards > *, main.enter .ov-tiles > *, main.enter .ov-q > * { animation-duration: .3s; }
-.sheet { animation: pop2 .18s var(--soft); }
-.toast { animation-duration: .2s; }
-
-/* ---------- the tools' own panels: the same small corners and hairlines ---------- */
-.sp-dir, .sp-file, .cs-t, .sp-g, .sp-pr, .fm-pane, .fm-err, .fm-info, .fm-kv, .fm-area, .fm-cmp-list, .rn-table, .ar-dest, .ar-prog,
-textarea.vt-in, .vt-warn, .vt-item, .vt-gen, .st-tile, .un-no, .job-when, .job-row, .opt.cl, .empty .big-i { border-radius: 10px; box-shadow: none; }
-.rn-row, .dz-i.ar-ico { border-radius: 8px; }
-.un-ic, .su-ic { border-radius: 8px; color: var(--muted); background: none; border: 1px solid var(--edge); box-shadow: none; }
-.un-ic svg, .su-ic svg { width: 17px; height: 17px; stroke-width: 1.6; }
-.sp-quick.tint:hover, .sp-chipbtn.tint:hover { background: var(--glass-2); }
-button.chip.vt-hchip.on { border-color: var(--stroke); background: var(--glass-2); }
+/* the tools' own coloured icons: one colour too */
+.un-ic, .su-ic { color: var(--muted); background: var(--glass); border: 1px solid var(--edge); box-shadow: none; }
