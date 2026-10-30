@@ -35,6 +35,8 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.7.2 (30 Oct):** the side back as in 0.7.0 (Alex: "leave the side as it was"), every tool fitting in it; the window buttons' strip and the big window stay.
+
 **0.7.1 (30 Oct):** the Mac's three window buttons (and Windows' own) in a 40px strip above the floating columns, as in
 RoarMail (main.js trafficLightPosition 20/13, overlay 40px); the side's words 50% bigger (Alex), the list scrolling
 inside the side when the window is short; the window opens big (90% of the screen, up to 1600 x 1060).

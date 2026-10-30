@@ -53,7 +53,7 @@ const SAMPLE = {
   ],
 }
 /* the version shown in a browser: the one in package.json (test/version.test.js keeps the two the same) */
-export const VERSION = '0.7.1'
+export const VERSION = '0.7.2'
 /* Do by itself in a browser: the jobs as Settings shows them, with a few runs in the log */
 function demoJobs() {
   const D = (d, h = 10) => { const x = new Date(); x.setDate(x.getDate() - d); x.setHours(h, 0, 0, 0); return x.getTime() }
