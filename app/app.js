@@ -207,16 +207,26 @@ function drawTop() {
 }
 
 /* ---------- the side menu (Alex, 28 Oct: a utility of many tools) ---------- */
-const NAV = [
-  // the first page: what the computer needs (Alex, 29 Oct)
-  ['', [['home', 'Overview', 'home']]],
-  ['Space', [['space', 'Space map', 'pie'], ['clean', 'Clean up', 'broom'], ['leftovers', 'Project leftovers', 'box'], ['twins', 'Find twins', 'twins']]],
-  ['Shoot', [['copy', 'Make a twin', 'shield'], ['backup', 'Check a backup', 'card'], ['report', 'Media report', 'list'], ['clipcheck', 'Clip check', 'pulse'], ['contact', 'Contact sheet', 'grid'], ['rename', 'Rename clips', 'rename']]],
-  ['Files', [['files', 'File manager', 'folder'], ['archive', 'Archives', 'zip']]],
-  ['Drives', [['drives', 'Drive health', 'drive'], ['speed', 'Disk speed test', 'gauge']]],
-  ['Computer', [['stats', 'Computer stats', 'chip'], ['startup', 'Startup items', 'power'], ['uninstall', 'Uninstall apps', 'apps']]],
-  ['Private', [['vault', 'Vault', 'lock']]],
+/* three spaces (Alex, 31 Oct: "many tools, it confuses"; his choice, A): Shoot, Clean up, Computer, picked in the bar
+   at the top; the side lists only the tools of the one picked, each with a line on what it does. Overview and
+   Settings stay at the foot of the side, ⌘K finds any tool by its name or by what it does. */
+const SPACES = [
+  ['shoot', 'Shoot', 'For the shoot', 'shield', [['copy', 'Make a twin', 'shield', 'Copy a card, checked'], ['backup', 'Check a backup', 'card', 'Is the copy whole?'], ['clipcheck', 'Clip check', 'pulse', 'Black frames, silence, broken files'], ['report', 'Media report', 'list', 'A PDF of the clips'], ['contact', 'Contact sheet', 'grid', 'A frame of every clip'], ['rename', 'Rename clips', 'rename', 'Names in one go']]],
+  ['clean', 'Clean up', 'Free up space', 'broom', [['clean', 'Clean up', 'broom', 'Caches and leftovers, to the Trash'], ['space', 'Space map', 'pie', 'What fills the disk'], ['twins', 'Find twins', 'twins', 'The same file twice, similar photos'], ['leftovers', 'Project leftovers', 'box', 'Renders and caches of old projects'], ['uninstall', 'Uninstall apps', 'apps', 'An app and what it leaves behind']]],
+  ['computer', 'Computer', 'Computer and drives', 'chip', [['stats', 'Computer stats', 'chip', 'Memory, processor, heat'], ['drives', 'Drive health', 'drive', 'Is a drive failing or full?'], ['speed', 'Disk speed test', 'gauge', 'How fast a drive reads and writes'], ['startup', 'Startup items', 'power', 'What starts with the computer'], ['files', 'File manager', 'folder', 'Browse, move, tidy up'], ['archive', 'Archives', 'zip', 'Zip and unzip'], ['vault', 'Vault', 'lock', 'Passwords and secrets, locked']]],
 ]
+const NAV = [['', [['home', 'Overview', 'home']]], ...SPACES.map(([, label, , , items]) => [label, items])]
+const spaceOf = (id) => SPACES.find((sp) => sp[4].some((x) => x[0] === id))?.[0] || ''
+// what usually comes next after a tool, shown under the side's list
+const NEXT = { copy: ['backup', 'report', 'contact'], backup: ['report'], clipcheck: ['report', 'contact'], report: ['contact'], contact: ['rename'], space: ['clean', 'twins'], clean: ['space'], twins: ['space'], leftovers: ['clean'], uninstall: ['startup'], startup: ['stats'], drives: ['speed'], speed: ['drives'], stats: ['startup'] }
+Object.assign(EL, {
+  'For the shoot': 'Για το γύρισμα', 'Free up space': 'Κάνε χώρο', 'Computer and drives': 'Υπολογιστής και δίσκοι',
+  'Copy a card, checked': 'Αντιγραφή κάρτας, ελεγμένη', 'Is the copy whole?': 'Είναι ολόκληρο το αντίγραφο;', 'Black frames, silence, broken files': 'Μαύρα καρέ, σιωπή, χαλασμένα αρχεία', 'A PDF of the clips': 'Ένα PDF με τα πλάνα', 'A frame of every clip': 'Ένα καρέ από κάθε πλάνο', 'Names in one go': 'Ονόματα με μιας',
+  'Caches and leftovers, to the Trash': 'Cache και υπολείμματα, στον Κάδο', 'What fills the disk': 'Τι γεμίζει τον δίσκο', 'The same file twice, similar photos': 'Το ίδιο αρχείο δύο φορές, παρόμοιες φωτογραφίες', 'Renders and caches of old projects': 'Renders και cache παλιών project', 'An app and what it leaves behind': 'Μια εφαρμογή και ό,τι αφήνει πίσω της',
+  'Memory, processor, heat': 'Μνήμη, επεξεργαστής, θερμοκρασία', 'Is a drive failing or full?': 'Χαλάει ή γέμισε κάποιος δίσκος;', 'How fast a drive reads and writes': 'Πόσο γρήγορα διαβάζει και γράφει ένας δίσκος', 'What starts with the computer': 'Τι ξεκινά μαζί με τον υπολογιστή', 'Browse, move, tidy up': 'Δες, μετακίνησε, τακτοποίησε', 'Zip and unzip': 'Συμπίεση και αποσυμπίεση', 'Passwords and secrets, locked': 'Κωδικοί και μυστικά, κλειδωμένα',
+  'Find a tool': 'Βρες εργαλείο', 'Next': 'Μετά', 'No tool by that name.': 'Κανένα εργαλείο με αυτό το όνομα.', 'Type a tool, or what you want to do': 'Γράψε ένα εργαλείο, ή τι θέλεις να κάνεις',
+  'Uninstall apps': 'Απεγκατάσταση εφαρμογών', 'Startup items': 'Εκκίνηση', 'Computer stats': 'Στατιστικά υπολογιστή', 'Drive health': 'Υγεία δίσκων', 'Disk speed test': 'Ταχύτητα δίσκου', 'File manager': 'Διαχείριση αρχείων', 'Archives': 'Συμπιεσμένα',
+})
 const navLabel = (id) => (id === 'settings' ? 'Settings' : NAV.flatMap((g) => g[1]).find((x) => x[0] === id)?.[1] || '')
 // the app opens on the Overview (Alex, 29 Oct); the last tool only when Settings > Open where I left off is on
 if (!navLabel(S.mode) || S.opts.resume !== true) S.mode = 'home'
@@ -236,15 +246,74 @@ function applyLook() {
 darkNow?.addEventListener?.('change', () => { if (S.opts.theme === 'auto') applyLook() })
 applyLook()
 let busyTool = false // a tool's own long job: the menu waits for it
+// the space shown: the one of the open tool, else the last one picked
+const curSpace = () => spaceOf(S.mode) || (SPACES.some((x) => x[0] === S.opts.space) ? S.opts.space : 'shoot')
+function goTool(id) {
+  const lock = S.view === 'scan' || S.cleanBusy || busyTool
+  if (lock || (S.mode === id && S.view === 'home')) return
+  S.mode = id; S.view = 'home'
+  const sp = spaceOf(id); if (sp) S.opts = { ...S.opts, space: sp, lastIn: { ...(S.opts.lastIn || {}), [sp]: id } }
+  saveOpts(); draw()
+}
+// a space picked in the bar: its last tool, or its first
+function goSpace(sp) {
+  const lock = S.view === 'scan' || S.cleanBusy || busyTool
+  if (lock) return
+  const tools = SPACES.find((x) => x[0] === sp)[4]
+  const last = S.opts.lastIn?.[sp]
+  goTool(tools.some((x) => x[0] === last) ? last : tools[0][0])
+}
+/* the bar across the top: RoarKit (back to the Overview), the three spaces in the middle, Find a tool on the right */
+function barEl() {
+  const cur = spaceOf(S.mode)
+  return h('div', { class: 'appbar' },
+    h('button', { class: 'wm', title: t('Overview'), onclick: () => goTool('home') }, h('span', {}, NAME[0]), h('b', {}, NAME[1])),
+    h('div', { class: 'spaces', role: 'tablist' }, ...SPACES.map(([id, label, , icon, items]) => h('button', { class: 'space' + (cur === id ? ' on' : ''), role: 'tab', 'aria-selected': cur === id ? 'true' : 'false', onclick: () => goSpace(id) },
+      h('span', { class: 'sp-ic', html: I[icon] }), h('span', { class: 'sp-l' }, t(label)), h('small', {}, String(items.length))))),
+    h('button', { class: 'find', onclick: openFind, title: t('Find a tool') + (T.platform === 'darwin' ? ' (⌘K)' : ' (Ctrl+K)') }, ico('search'), h('span', { class: 'lbl' }, t('Find a tool')), h('kbd', {}, T.platform === 'darwin' ? '⌘K' : 'Ctrl K')))
+}
+/* ⌘K: every tool, found by its name or by what it does, in English or Greek; arrows and Enter */
+function openFind() {
+  if (document.querySelector('.find-veil')) return
+  const all = NAV.flatMap((g) => g[1]).concat([['settings', 'Settings', 'gear', '']])
+  const norm = (x) => String(x || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+  let at = 0, hits = all
+  const input = h('input', { class: 'find-in', placeholder: t('Type a tool, or what you want to do'), 'aria-label': t('Find a tool') })
+  const list = h('div', { class: 'find-list', role: 'listbox' })
+  const veil = h('div', { class: 'find-veil', onclick: (e) => { if (e.target === veil) close() } }, h('div', { class: 'find-box' }, h('div', { class: 'find-row' }, ico('search'), input), list))
+  const close = () => { veil.remove(); document.removeEventListener('keydown', key, true) }
+  const pick = (x) => { close(); if (x) goTool(x[0]) }
+  const paint = () => {
+    list.replaceChildren(...(hits.length ? hits.map((x, i) => h('button', { class: 'find-hit' + (i === at ? ' on' : ''), role: 'option', onmouseenter: () => { at = i; paint() }, onclick: () => pick(x) },
+      h('span', { class: 'tile-ic', 'data-tool': x[0], html: I[x[2]] }), h('span', { class: 'nav-t' }, h('b', {}, t(x[1])), x[3] ? h('small', {}, t(x[3])) : null),
+      h('em', {}, t(SPACES.find((sp) => sp[0] === spaceOf(x[0]))?.[1] || '')))) : [h('p', { class: 'find-none' }, t('No tool by that name.'))]))
+  }
+  input.addEventListener('input', () => {
+    const q = norm(input.value).trim()
+    hits = !q ? all : all.filter((x) => [x[1], x[3], EL[x[1]], EL[x[3] || ''], ...(SPACES.find((sp) => sp[0] === spaceOf(x[0])) || []).slice(1, 3)].some((v) => norm(v).includes(q)))
+    at = 0; paint()
+  })
+  const key = (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); close() }
+    else if (e.key === 'ArrowDown') { e.preventDefault(); at = Math.min(hits.length - 1, at + 1); paint() }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); at = Math.max(0, at - 1); paint() }
+    else if (e.key === 'Enter') { e.preventDefault(); pick(hits[at]) }
+  }
+  document.addEventListener('keydown', key, true)
+  document.body.appendChild(veil); paint(); input.focus()
+}
+document.addEventListener('keydown', (e) => { if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') { e.preventDefault(); openFind() } })
 function sideEl() {
   const lock = S.view === 'scan' || S.cleanBusy || busyTool
   // each tool its own coloured tile (Alex, 29 Oct: "a fresher design"), the chosen one under a glass lens that glides
-  const item = ([id, label, icon]) => h('button', { class: 'nav' + (S.mode === id ? ' on' : ''), 'data-tool': id, disabled: lock && S.mode !== id, 'aria-current': S.mode === id ? 'page' : null,
-    onclick: () => { if (lock || (S.mode === id && S.view === 'home')) return; S.mode = id; S.view = 'home'; saveOpts(); draw() } }, h('span', { class: 'tile-ic', 'data-tool': id, html: I[icon] }), h('span', {}, t(label)))
+  const item = ([id, label, icon, sub]) => h('button', { class: 'nav' + (sub ? ' two' : '') + (S.mode === id ? ' on' : ''), 'data-tool': id, disabled: lock && S.mode !== id, 'aria-current': S.mode === id ? 'page' : null, title: sub ? t(sub) : null,
+    onclick: () => goTool(id) }, h('span', { class: 'tile-ic', 'data-tool': id, html: I[icon] }), h('span', { class: 'nav-t' }, h('b', {}, t(label)), sub ? h('small', {}, t(sub)) : null))
+  const sp = SPACES.find((x) => x[0] === curSpace()) || SPACES[0]
+  const next = (NEXT[S.mode] || []).map((id) => NAV.flatMap((g) => g[1]).find((x) => x[0] === id)).filter(Boolean)
   return h('nav', { class: 'side' },
-    h('div', { class: 'wm' }, h('span', {}, NAME[0]), h('b', {}, NAME[1])),
-    h('div', { class: 'side-list' }, h('i', { class: 'side-lens', 'aria-hidden': 'true' }), ...NAV.map(([g, items]) => h('div', { class: 'side-g' }, g ? h('small', {}, t(g)) : null, ...items.map(item)))),
-    h('div', { class: 'side-foot' }, item(['settings', 'Settings', 'gear']),
+    h('div', { class: 'side-list' }, h('i', { class: 'side-lens', 'aria-hidden': 'true' }), h('div', { class: 'side-g' }, h('small', {}, t(sp[2])), ...sp[4].map(item))),
+    next.length && S.view === 'home' ? h('div', { class: 'side-next' }, h('small', {}, t('Next')), ...next.map(([id, label, icon]) => h('button', { class: 'chip-next', disabled: lock, onclick: () => goTool(id) }, h('span', { class: 'tile-ic', 'data-tool': id, html: I[icon] }), t(label)))) : null,
+    h('div', { class: 'side-foot' }, item(['home', 'Overview', 'home']), item(['settings', 'Settings', 'gear']),
       // Privacy Policy and Terms (Alex, 25 Oct): on the company site, opens in the browser
       h('div', { class: 'side-meta' }, h('a', { href: 'https://themadlions.com/legal/roarkit/' + (S.lang === 'el' ? '?lang=el' : ''), target: '_blank', rel: 'noopener' }, t('Privacy & Terms')),
         S.version ? h('span', {}, 'v' + S.version + ' beta') : null)))
@@ -449,7 +518,7 @@ function draw() {
   const kept = key === lastKey ? scrollsOf(app.querySelector('.col > main')) : null
   lastKey = key
   const side = sideEl()
-  app.replaceChildren(side, h('div', { class: 'col' }, topEl, body))
+  app.replaceChildren(barEl(), side, h('div', { class: 'col' }, topEl, body))
   if (kept) putScrolls(body, kept)
   drawTop()
   drawFoot()

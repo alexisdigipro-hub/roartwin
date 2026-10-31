@@ -152,3 +152,60 @@ html[data-theme="light"] .switch { background: rgba(20,24,30,.12); }
 
 /* the tools' own coloured icons: one colour, as the side */
 .un-ic, .su-ic { color: var(--muted); background: var(--glass-2); border: 0; box-shadow: none; border-radius: var(--r); }
+
+/* ---------- three spaces (Alex, 31 Oct, his choice A): a bar across the top with RoarKit, the three spaces in the
+   middle and Find a tool; the side lists only the tools of the space picked, each with a line on what it does ---------- */
+#app { grid-template-columns: 252px minmax(0, 1fr); grid-template-rows: 56px minmax(0, 1fr); }
+/* the bar is one more floating glass card, over the two columns; the window's buttons keep their strip above it */
+.appbar { grid-column: 1 / -1; position: relative; z-index: 6; display: flex; align-items: center; gap: 14px; padding: 0 10px 0 12px; -webkit-app-region: drag;
+  border: 1px solid var(--edge); border-radius: var(--R); box-shadow: var(--sh); background: var(--side-m); -webkit-backdrop-filter: var(--blur); backdrop-filter: var(--blur); }
+.appbar > * { -webkit-app-region: no-drag; }
+.appbar .wm { flex: none; display: flex; align-items: center; height: 36px; line-height: 1; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--text); cursor: pointer; font-size: 16px; letter-spacing: .08em; }
+.appbar .wm span { font-weight: 300; } .appbar .wm b { font-weight: 800; background: linear-gradient(90deg, var(--acc), color-mix(in srgb, var(--acc) 55%, #ffb36b)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.appbar .wm:hover { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.spaces { margin: 0 auto; display: flex; gap: 3px; padding: 3px; border-radius: 999px; background: color-mix(in srgb, var(--text) 5%, transparent); border: 1px solid var(--line); }
+.space { display: flex; align-items: center; gap: 8px; height: 36px; line-height: 1; padding: 0 18px 0 12px; border: 0; border-radius: 999px; background: none; color: var(--dim); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: color .2s, background .25s var(--soft), box-shadow .25s; }
+.space:hover { color: var(--text); }
+.space .sp-ic { display: grid; place-items: center; } .space .sp-ic svg { width: 16px; height: 16px; }
+.space small { font-size: 11px; font-weight: 500; opacity: .6; }
+.space.on { color: var(--text); background: color-mix(in srgb, var(--text) 11%, transparent); box-shadow: inset 0 1px 0 var(--hi), 0 0 0 1px color-mix(in srgb, var(--acc) 45%, transparent), 0 0 20px color-mix(in srgb, var(--acc) 20%, transparent); }
+.space.on .sp-ic { color: var(--acc); }
+html[data-theme="light"] .space.on { background: #fff; box-shadow: 0 1px 2px rgba(20,24,40,.1), 0 0 0 1px color-mix(in srgb, var(--acc) 40%, transparent); }
+.find { flex: none; display: flex; align-items: center; gap: 8px; height: 36px; width: 210px; padding: 0 8px 0 12px; border-radius: 999px; border: 1px solid var(--line); background: color-mix(in srgb, var(--text) 4%, transparent); color: var(--dim); font: inherit; font-size: 13px; cursor: pointer; }
+.find:hover { color: var(--text); border-color: color-mix(in srgb, var(--text) 18%, transparent); }
+.find svg { width: 15px; height: 15px; } .find kbd { margin-left: auto; padding: 2px 7px; border-radius: 6px; font: 600 10.5px var(--font, inherit); background: color-mix(in srgb, var(--text) 8%, transparent); }
+#app > .side .wm { display: none; }
+#app > .side { padding-top: 14px; }
+#app > .side .side-g > small { padding: 2px 12px 8px; }
+#app > .side .nav-t small { padding: 0; font-size: 11.5px; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.nav.two { height: auto; min-height: 50px; padding: 7px 8px; align-items: center; }
+.nav.two .tile-ic { width: 30px; height: 30px; border-radius: 9px; } .nav.two .tile-ic svg { width: 17px; height: 17px; }
+.nav-t { display: grid; gap: 1px; min-width: 0; text-align: left; }
+.nav-t b { font-weight: inherit; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav-t small { font-size: 11.5px; font-weight: 400; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nav.two.on .nav-t small { color: color-mix(in srgb, var(--text) 70%, transparent); }
+.side-next { flex: none; display: grid; gap: 4px; padding: 10px 2px 6px; border-top: 1px solid var(--line); }
+.side-next small { padding: 0 8px 2px; color: var(--dim); font-size: 10.5px; font-weight: 600; letter-spacing: .09em; text-transform: uppercase; }
+.chip-next { display: flex; align-items: center; gap: 9px; height: 32px; padding: 0 8px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 13px; text-align: left; cursor: pointer; opacity: .85; }
+.chip-next:hover:not(:disabled) { background: color-mix(in srgb, var(--text) 6%, transparent); opacity: 1; }
+.chip-next::after { content: '›'; margin-left: auto; color: var(--dim); }
+/* Find a tool (⌘K) */
+.find-veil { position: fixed; inset: 0; z-index: 200; display: grid; justify-items: center; align-items: start; padding-top: 12vh; background: rgba(0,0,0,.35); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); animation: findIn .18s var(--soft); }
+@keyframes findIn { from { opacity: 0; } }
+.find-box { width: min(620px, calc(100vw - 40px)); border-radius: 20px; overflow: hidden; background: color-mix(in srgb, var(--bg) 88%, transparent); border: 1px solid var(--line); -webkit-backdrop-filter: saturate(160%) blur(24px); backdrop-filter: saturate(160%) blur(24px); box-shadow: 0 30px 80px rgba(0,0,0,.45); animation: findBox .25s var(--spring); }
+@keyframes findBox { from { transform: translateY(-8px) scale(.98); opacity: 0; } }
+.find-row { display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--line); color: var(--dim); }
+.find-row svg { width: 18px; height: 18px; }
+.find-veil .find-in, .find-veil .find-in:focus { flex: 1; height: 56px; padding: 0; border: 0; border-radius: 0; outline: 0; box-shadow: none; background: none; color: var(--text); font: inherit; font-size: 17px; }
+.find-list { max-height: 50vh; overflow: auto; padding: 6px; display: grid; gap: 2px; }
+.find-hit { display: flex; align-items: center; gap: 12px; padding: 8px 10px; border: 0; border-radius: 12px; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.find-hit.on { background: color-mix(in srgb, var(--acc) 16%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--acc) 35%, transparent); }
+.find-hit .tile-ic { width: 30px; height: 30px; border-radius: 9px; } .find-hit .tile-ic svg { width: 17px; height: 17px; }
+.find-hit em { margin-left: auto; font-style: normal; font-size: 12px; color: var(--dim); }
+.find-none { margin: 0; padding: 18px; color: var(--dim); text-align: center; }
+@media (max-width: 1040px) {
+  #app { grid-template-columns: 64px minmax(0, 1fr); }
+  .space .sp-l, .find .lbl, .find kbd { display: none; } .space { padding: 0 12px; } .find { width: auto; }
+  .nav.two { min-height: 44px; justify-content: center; } .side .nav-t, .side .side-g > small, .side-next small, .chip-next { display: none; }
+  .side-next { border: 0; padding: 0; }
+}
