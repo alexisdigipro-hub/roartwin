@@ -95,11 +95,33 @@ function pump() {
   }
 }
 
-async function folderSize(it) {
-  F.sizes[it.path] = null
-  C.draw()
-  try { F.sizes[it.path] = await call('files-size', { path: it.path }) } catch { delete F.sizes[it.path] }
-  C.draw()
+async function folderSize(it) { wantSize(it.path) }
+/* a folder's size, worked out by itself (Alex, 31 Oct: "why do I have to press Size to see them, I go there to see
+   them"): every folder shown is measured, three at a time, the ones of the open folders first; each figure shows in
+   its row as it comes, and a list sorted by size takes its order again once they are in */
+const sizeQ = [], sizeOn = new Set()
+let sizeRun = 0, sizeSort = 0
+const dirOf = (p) => p.replace(/[\\/][^\\/]*$/, '')
+function wantSize(p) {
+  if (!p || p in F.sizes || sizeOn.has(p)) return
+  sizeOn.add(p); sizeQ.push(p); pumpSize()
+}
+function showSize(p) {
+  document.querySelectorAll('.fm-row').forEach((row) => {
+    if (row.dataset.path !== p) return
+    const cell = row.querySelector('.mu'); if (cell) cell.textContent = F.sizes[p] != null ? C.bytes(F.sizes[p]) : p in F.sizes ? '…' : ''
+  })
+}
+function pumpSize() {
+  while (sizeRun < 3 && sizeQ.length) {
+    const p = sizeQ.shift()
+    F.sizes[p] = null; sizeRun++; showSize(p)
+    call('files-size', { path: p }).then((n) => { F.sizes[p] = n }).catch(() => { delete F.sizes[p] }).finally(() => {
+      sizeRun--; sizeOn.delete(p); showSize(p)
+      if (F.panes.some((x) => x.sort.k === 'size')) { clearTimeout(sizeSort); sizeSort = setTimeout(() => { if (C?.S.mode === 'files') C.draw() }, 500) }
+      pumpSize()
+    })
+  }
 }
 
 function paneEl(ctx, i) {
@@ -147,12 +169,16 @@ function rows(ctx, i) {
   const pane = F.panes[i]
   const list = shown(pane)
   const box = h('div', { class: 'fm-list', 'data-i': String(i), tabindex: '-1' })
+  // the folders waiting to be measured: only those of the folders open now
+  const open = new Set(F.panes.map((x) => x.path))
+  for (let k = sizeQ.length - 1; k >= 0; k--) if (!open.has(dirOf(sizeQ[k]))) { sizeOn.delete(sizeQ[k]); sizeQ.splice(k, 1) }
+  list.slice(0, 400).forEach((it) => { if (it.dir) wantSize(it.path) })
   if (!list.length) box.append(h('p', { class: 'fm-empty' }, pane.q ? t('Nothing by that name here.') : t('An empty folder.')))
   const io = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { wantThumb(e.target.dataset.thumb); io.unobserve(e.target) } }), { root: box, rootMargin: '200px' }) : null
   for (const it of list.slice(0, 3000)) {
     const th = h('div', { class: 'fm-th' + (F.thumbs[it.path] ? ' has' : ''), html: iconOf(it, I), style: F.thumbs[it.path] ? { backgroundImage: `url("${F.thumbs[it.path]}")` } : null })
     if (media(it) && F.thumbs[it.path] === undefined) { th.dataset.thumb = it.path; io ? io.observe(th) : wantThumb(it.path) } else if (media(it)) th.dataset.thumb = it.path
-    const sz = it.dir ? (F.sizes[it.path] != null ? bytes(F.sizes[it.path]) : it.path in F.sizes ? '…' : h('button', { class: 'fm-sz', title: t('Work out the size of this folder'), onclick: (e) => { e.stopPropagation(); folderSize(it) } }, t('Size'))) : bytes(it.size || 0)
+    const sz = it.dir ? (F.sizes[it.path] != null ? bytes(F.sizes[it.path]) : '…') : bytes(it.size || 0)
     box.append(h('div', { class: 'fm-row' + (pane.sel.has(it.path) ? ' sel' : '') + (it.hidden ? ' hid' : ''), 'data-path': it.path, draggable: 'true', title: it.name,
       onclick: (e) => pick(i, it, e), ondblclick: () => go(i, it),
       ondragstart: (e) => { if (!pane.sel.has(it.path)) { pane.sel = new Set([it.path]); pane.anchor = it.path } e.dataTransfer.setData('text/x-roar-files', JSON.stringify({ from: i, paths: [...pane.sel] })); e.dataTransfer.effectAllowed = 'copyMove' } },
@@ -188,7 +214,7 @@ function infoEl(ctx) {
   const it = sel[0]
   if (it.dir) {
     box.append(h('div', { class: 'fm-info-head' }, h('div', { class: 'fm-th big', html: I.folder }), h('div', {}, h('b', {}, it.name), h('small', {}, t('Folder')))),
-      h('div', { class: 'fm-kv' }, h('span', {}, t('Size')), h('b', {}, F.sizes[it.path] != null ? bytes(F.sizes[it.path]) : h('button', { class: 'fm-sz', onclick: () => folderSize(it) }, t('Work it out'))), h('span', {}, t('Modified')), h('b', {}, ctx.dateOf(it.mtime))))
+      h('div', { class: 'fm-kv' }, h('span', {}, t('Size')), h('b', {}, F.sizes[it.path] != null ? bytes(F.sizes[it.path]) : (wantSize(it.path), '…')), h('span', {}, t('Modified')), h('b', {}, ctx.dateOf(it.mtime))))
     return box
   }
   const got = F.infos[it.path]
