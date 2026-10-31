@@ -35,6 +35,8 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.8.3 (31 Oct):** the spaces' names centred in their buttons (the class of the name was also Space map's, which pushed it down).
+
 **0.8.2 (31 Oct):** the spaces in the order Alex asked: **Computer** first (it starts on Computer stats), then Clean up, then Shoot.
 
 **0.8.1 (31 Oct):** File manager: every folder's size shows by itself (Alex: "why do I have to press Size to see them"), worked out three at a time for the folders open now, each figure in its row as it comes; a list sorted by size takes its order again once they are in.
