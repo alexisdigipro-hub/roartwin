@@ -269,7 +269,7 @@ function barEl() {
   return h('div', { class: 'appbar' },
     h('button', { class: 'wm', title: t('Overview'), onclick: () => goTool('home') }, h('span', {}, NAME[0]), h('b', {}, NAME[1])),
     h('div', { class: 'spaces', role: 'tablist' }, ...SPACES.map(([id, label, , icon, items]) => h('button', { class: 'space' + (cur === id ? ' on' : ''), role: 'tab', 'aria-selected': cur === id ? 'true' : 'false', onclick: () => goSpace(id) },
-      h('span', { class: 'sp-ic', html: I[icon] }), h('span', { class: 'sp-l' }, t(label)), h('small', {}, String(items.length))))),
+      h('span', { class: 'sp-ic', html: I[icon] }), h('span', { class: 'space-l' }, t(label)), h('small', {}, String(items.length))))),
     h('button', { class: 'find', onclick: openFind, title: t('Find a tool') + (T.platform === 'darwin' ? ' (⌘K)' : ' (Ctrl+K)') }, ico('search'), h('span', { class: 'lbl' }, t('Find a tool')), h('kbd', {}, T.platform === 'darwin' ? '⌘K' : 'Ctrl K')))
 }
 /* ⌘K: every tool, found by its name or by what it does, in English or Greek; arrows and Enter */

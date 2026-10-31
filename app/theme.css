@@ -205,7 +205,7 @@ html[data-theme="light"] .space.on { background: #fff; box-shadow: 0 1px 2px rgb
 .find-none { margin: 0; padding: 18px; color: var(--dim); text-align: center; }
 @media (max-width: 1040px) {
   #app { grid-template-columns: 64px minmax(0, 1fr); }
-  .space .sp-l, .find .lbl, .find kbd { display: none; } .space { padding: 0 12px; } .find { width: auto; }
+  .space .space-l, .find .lbl, .find kbd { display: none; } .space { padding: 0 12px; } .find { width: auto; }
   .nav.two { min-height: 44px; justify-content: center; } .side .nav-t, .side .side-g > small, .side-next small, .chip-next { display: none; }
   .side-next { border: 0; padding: 0; }
 }
