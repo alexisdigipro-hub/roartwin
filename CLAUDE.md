@@ -26,4 +26,4 @@ dashes; the app's own text is English by default, with Greek as a choice (app.js
 - Releases: bump `version` in package.json, tag `vX.Y.Z`, push the tag (.github/workflows/desktop.yml); the release's
   files are the download links and what electron/updater.js looks at.
 - Work on a branch, open a PR, wait for the green check (.github/workflows/check.yml), merge it yourself.
-- Three spaces since 0.8.0 (Alex, 31 Oct): app.js SPACES (Shoot / Clean up / Computer, each tool with a line on what it does) in the bar at the top (barEl), the side lists the space picked (sideEl), NEXT the tools that follow one, ⌘K Find a tool (openFind); NAV is derived from SPACES. A new tool goes into one space with its line and its Greek. Styles at the end of app/theme.css.
+- Three spaces since 0.8.0 (Alex, 31 Oct): app.js SPACES (Computer / Clean up / Shoot, each tool with a line on what it does) in the bar at the top (barEl), the side lists the space picked (sideEl), NEXT the tools that follow one, ⌘K Find a tool (openFind); NAV is derived from SPACES. A new tool goes into one space with its line and its Greek. Styles at the end of app/theme.css.

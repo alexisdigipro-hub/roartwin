@@ -35,6 +35,8 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.8.2 (31 Oct):** the spaces in the order Alex asked: **Computer** first (it starts on Computer stats), then Clean up, then Shoot.
+
 **0.8.1 (31 Oct):** File manager: every folder's size shows by itself (Alex: "why do I have to press Size to see them"), worked out three at a time for the folders open now, each figure in its row as it comes; a list sorted by size takes its order again once they are in.
 
 **0.8.0 (31 Oct): three spaces.** Alex: "many tools, it confuses"; of three layouts he picked A. A bar across the top holds RoarKit (back to the Overview), the three spaces **Shoot · Clean up · Computer** in the middle and **Find a tool** (⌘K / Ctrl+K) on the right. The side lists only the tools of the space picked, each with a line on what it does, then **Next** (the tools that usually come after this one), then Overview and Settings. A space opens on the tool last used in it. Shoot: Make a twin, Check a backup, Clip check, Media report, Contact sheet, Rename clips. Clean up: Clean up, Space map, Find twins, Project leftovers, Uninstall apps. Computer: Computer stats, Drive health, Disk speed test, Startup items, File manager, Archives, Vault. Find a tool searches names and what each does, in English and Greek.
