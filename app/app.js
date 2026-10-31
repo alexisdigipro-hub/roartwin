@@ -207,13 +207,13 @@ function drawTop() {
 }
 
 /* ---------- the side menu (Alex, 28 Oct: a utility of many tools) ---------- */
-/* three spaces (Alex, 31 Oct: "many tools, it confuses"; his choice, A): Shoot, Clean up, Computer, picked in the bar
+/* three spaces (Alex, 31 Oct: "many tools, it confuses"; his choice, A): Computer (from Computer stats), Clean up, Shoot, picked in the bar
    at the top; the side lists only the tools of the one picked, each with a line on what it does. Overview and
    Settings stay at the foot of the side, ⌘K finds any tool by its name or by what it does. */
 const SPACES = [
-  ['shoot', 'Shoot', 'For the shoot', 'shield', [['copy', 'Make a twin', 'shield', 'Copy a card, checked'], ['backup', 'Check a backup', 'card', 'Is the copy whole?'], ['clipcheck', 'Clip check', 'pulse', 'Black frames, silence, broken files'], ['report', 'Media report', 'list', 'A PDF of the clips'], ['contact', 'Contact sheet', 'grid', 'A frame of every clip'], ['rename', 'Rename clips', 'rename', 'Names in one go']]],
-  ['clean', 'Clean up', 'Free up space', 'broom', [['clean', 'Clean up', 'broom', 'Caches and leftovers, to the Trash'], ['space', 'Space map', 'pie', 'What fills the disk'], ['twins', 'Find twins', 'twins', 'The same file twice, similar photos'], ['leftovers', 'Project leftovers', 'box', 'Renders and caches of old projects'], ['uninstall', 'Uninstall apps', 'apps', 'An app and what it leaves behind']]],
   ['computer', 'Computer', 'Computer and drives', 'chip', [['stats', 'Computer stats', 'chip', 'Memory, processor, heat'], ['drives', 'Drive health', 'drive', 'Is a drive failing or full?'], ['speed', 'Disk speed test', 'gauge', 'How fast a drive reads and writes'], ['startup', 'Startup items', 'power', 'What starts with the computer'], ['files', 'File manager', 'folder', 'Browse, move, tidy up'], ['archive', 'Archives', 'zip', 'Zip and unzip'], ['vault', 'Vault', 'lock', 'Passwords and secrets, locked']]],
+  ['clean', 'Clean up', 'Free up space', 'broom', [['clean', 'Clean up', 'broom', 'Caches and leftovers, to the Trash'], ['space', 'Space map', 'pie', 'What fills the disk'], ['twins', 'Find twins', 'twins', 'The same file twice, similar photos'], ['leftovers', 'Project leftovers', 'box', 'Renders and caches of old projects'], ['uninstall', 'Uninstall apps', 'apps', 'An app and what it leaves behind']]],
+  ['shoot', 'Shoot', 'For the shoot', 'shield', [['copy', 'Make a twin', 'shield', 'Copy a card, checked'], ['backup', 'Check a backup', 'card', 'Is the copy whole?'], ['clipcheck', 'Clip check', 'pulse', 'Black frames, silence, broken files'], ['report', 'Media report', 'list', 'A PDF of the clips'], ['contact', 'Contact sheet', 'grid', 'A frame of every clip'], ['rename', 'Rename clips', 'rename', 'Names in one go']]],
 ]
 const NAV = [['', [['home', 'Overview', 'home']]], ...SPACES.map(([, label, , , items]) => [label, items])]
 const spaceOf = (id) => SPACES.find((sp) => sp[4].some((x) => x[0] === id))?.[0] || ''
@@ -247,7 +247,7 @@ darkNow?.addEventListener?.('change', () => { if (S.opts.theme === 'auto') apply
 applyLook()
 let busyTool = false // a tool's own long job: the menu waits for it
 // the space shown: the one of the open tool, else the last one picked
-const curSpace = () => spaceOf(S.mode) || (SPACES.some((x) => x[0] === S.opts.space) ? S.opts.space : 'shoot')
+const curSpace = () => spaceOf(S.mode) || (SPACES.some((x) => x[0] === S.opts.space) ? S.opts.space : SPACES[0][0])
 function goTool(id) {
   const lock = S.view === 'scan' || S.cleanBusy || busyTool
   if (lock || (S.mode === id && S.view === 'home')) return
