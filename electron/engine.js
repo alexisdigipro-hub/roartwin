@@ -423,7 +423,8 @@ const READ_RAW = 96 * 1024 * 1024
 let tmpN = 0
 const tmpFile = (ext) => path.join(os.tmpdir(), `roarkit-photo-${process.pid}-${Date.now()}-${tmpN++}.${ext}`)
 /* a picture ffmpeg can read for this file: itself, or a JPEG made beside it in the temp folder (the RAW's preview, or a
-   HEIC through sips on a Mac). -> { src, w, h, done() } or null; done() takes away the temp copy (RoarKit's own) */
+   HEIC through sips on a Mac). -> { src, w, h, done() } or null; done() takes away the temp copy (RoarKit's own), at once:
+   taken away in the background it was sometimes still there when the scan had ended (the check on GitHub, 10 Nov) */
 async function readable(bin, f, stop) {
   const keep = { src: f.path, w: 0, h: 0, done: () => {} }
   if (isRaw(f.name)) {
@@ -436,14 +437,14 @@ async function readable(bin, f, stop) {
     if (!j || j.w * j.h < 160 * 120) return null
     const tmp = tmpFile('jpg')
     try { await fsp.writeFile(tmp, buf.subarray(j.start, j.end)) } catch { return null }
-    return { src: tmp, w: j.w, h: j.h, done: () => fs.rm(tmp, { force: true }, () => {}) }
+    return { src: tmp, w: j.w, h: j.h, done: () => { try { fs.rmSync(tmp, { force: true }) } catch {} } }
   }
   if (HEIC.has(extOf(f.name))) {
     const { out } = await ff(bin, ['-i', f.path, '-frames:v', '1', '-vf', 'scale=8:8,format=gray', '-f', 'rawvideo', '-'], stop, 1024)
     if (out.length >= 64 || process.platform !== 'darwin') return keep
     const tmp = tmpFile('jpg')
     const ok = await new Promise((done) => { const p = spawn('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '90', f.path, '--out', tmp], { windowsHide: true }); p.on('error', () => done(false)); p.on('close', (c) => done(c === 0)) })
-    return ok ? { src: tmp, w: 0, h: 0, done: () => fs.rm(tmp, { force: true }, () => {}) } : null
+    return ok ? { src: tmp, w: 0, h: 0, done: () => { try { fs.rmSync(tmp, { force: true }) } catch {} } } : null
   }
   return keep
 }
