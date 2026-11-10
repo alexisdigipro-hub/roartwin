@@ -35,6 +35,8 @@ that name, so without it those installs would download every update and never ta
 swipe, the mouse's side buttons. Every screen is remembered, inside a tool too (a tool's `nav`: get/set of what makes its
 screen, e.g. Space map's folder, File manager's two folders, a report's result).
 
+**0.8.4 (10 Nov):** a new icon, a case in plain white on off-black (the Lab's one family of icons).
+
 **0.8.3 (31 Oct):** the spaces' names centred in their buttons (the class of the name was also Space map's, which pushed it down).
 
 **0.8.2 (31 Oct):** the spaces in the order Alex asked: **Computer** first (it starts on Computer stats), then Clean up, then Shoot.
